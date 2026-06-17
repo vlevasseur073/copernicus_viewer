@@ -49,6 +49,31 @@ If problems persist, also try:
 LIBGL_ALWAYS_SOFTWARE=1 cargo run
 ```
 
+## Install
+
+### Rust (crates.io)
+
+```bash
+cargo install copernicus_viewer
+copernicus_viewer
+```
+
+Requires a Rust toolchain and OpenGL support (same as [Requirements](#requirements)).
+
+### Prebuilt binaries (GitHub Releases)
+
+Download the archive for your platform from [GitHub Releases](https://github.com/vlevasseur073/copernicus_viewer/releases), extract it, and run:
+
+```bash
+# Linux / macOS
+./copernicus_viewer /path/to/product.zarr
+
+# Windows
+copernicus_viewer.exe C:\path\to\product.zarr
+```
+
+Verify downloads with the `SHA256SUMS.txt` file attached to each release.
+
 ## Build & Run
 
 ```bash
@@ -62,6 +87,20 @@ Use **File → Open Zarr…** to load an EOPF product. You can also pass a path 
 
 ```bash
 cargo run -- /path/to/product.zarr
+```
+
+## Releasing (maintainers)
+
+1. Bump `version` in `Cargo.toml` and commit.
+2. Create and push an annotated tag: `git tag -a v0.1.0 -m "v0.1.0" && git push origin v0.1.0`
+3. Ensure the repository secret `CARGO_REGISTRY_TOKEN` is set ([crates.io token](https://crates.io/settings/tokens)).
+
+The [release workflow](.github/workflows/release.yml) runs tests, builds binaries for Linux, Windows, and macOS (x86_64 + arm64), attaches them to a GitHub Release, and publishes to crates.io (requires the `CARGO_REGISTRY_TOKEN` repository secret).
+
+For the **first** crates.io publish, create an API token at [crates.io/settings/tokens](https://crates.io/settings/tokens), add it as a GitHub secret, then either push a tag or run locally:
+
+```bash
+cargo publish
 ```
 
 ## EOPF Zarr structure

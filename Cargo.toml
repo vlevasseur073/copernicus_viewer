@@ -4,6 +4,17 @@ version = "0.1.0"
 edition = "2021"
 description = "GUI viewer for EOPF Zarr products"
 license = "MIT OR Apache-2.0"
+authors = ["Vincent Levasseur"]
+readme = "README.md"
+repository = "https://github.com/vlevasseur073/copernicus_viewer"
+homepage = "https://github.com/vlevasseur073/copernicus_viewer"
+keywords = ["zarr", "copernicus", "eopf", "viewer", "gui"]
+categories = ["science", "visualization", "gui"]
+rust-version = "1.75"
+exclude = ["/sample_data/"]
+
+[profile.release]
+strip = true
 
 [lib]
 name = "copernicus_viewer"
