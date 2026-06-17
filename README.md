@@ -12,6 +12,7 @@ A Rust GUI application to explore and visualize [EOPF](https://cpm.pages.eopf.co
 - **Async plot loading** with progress bar for large arrays
 - **Geo-referenced plotting**: coordinate arrays, CRS, and axis extent labels on heatmaps
 - **CF flag variables** with `flag_meanings` and `flag_values` / `flag_masks` (bitmask plots per flag)
+- **Coverage map** in the inspector — adaptive Plate Carrée view (zooms to regional tiles, global view for wide footprints) with Natural Earth coastlines
 
 ## Requirements
 
@@ -73,6 +74,8 @@ EOPF products follow the standard Zarr hierarchy described in [PSFD §4.4](https
 - Variable leaf directories with `.zarray`, `.zattrs`, and chunk files
 
 Sample data is available from the [EOPF Sentinel Zarr Samples Service](https://zarr.eopf.copernicus.eu/).
+
+Coastline data: [Natural Earth 110m land](https://www.naturalearthdata.com/) (public domain).
 
 ## License
 

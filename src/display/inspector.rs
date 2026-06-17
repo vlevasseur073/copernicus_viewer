@@ -1,12 +1,15 @@
+use crate::display::footprint::{parse_product_footprint, ProductFootprint};
+use crate::display::map::render_footprint_map;
 use crate::display::stats::{ArrayPreview, ArrayStatistics};
 use crate::display::stac::{render_attribute_tree, AttributeNode};
 use crate::display::{format_node_repr, parse_root_attributes};
-use crate::zarr::ZarrTreeNode;
+use crate::zarr::{ZarrNodeKind, ZarrTreeNode};
 
 #[derive(Clone, Debug, Default)]
 pub struct InspectorView {
     pub title: String,
     pub repr_body: String,
+    pub footprint: Option<ProductFootprint>,
     pub root_attributes: Option<Vec<AttributeNode>>,
     pub stats: Option<ArrayStatistics>,
     pub preview: Option<ArrayPreview>,
@@ -23,11 +26,12 @@ impl InspectorView {
         root: Option<&ZarrTreeNode>,
     ) -> Self {
         let repr = format_node_repr(node, product_name);
-        let root_attributes = parse_root_attributes(node, root);
+        let (root_attributes, footprint) = root_metadata(node, root);
 
         Self {
             title: repr.title,
             repr_body: repr.body,
+            footprint,
             root_attributes,
             stats: None,
             preview: None,
@@ -45,13 +49,41 @@ impl InspectorView {
     }
 }
 
+fn root_metadata(
+    node: &ZarrTreeNode,
+    root: Option<&ZarrTreeNode>,
+) -> (Option<Vec<AttributeNode>>, Option<ProductFootprint>) {
+    let root_node = if node.path == "/" {
+        Some(node)
+    } else {
+        root
+    };
+
+    let Some(root_node) = root_node else {
+        return (None, None);
+    };
+
+    let ZarrNodeKind::Group { attributes } = &root_node.kind else {
+        return (None, None);
+    };
+
+    let root_attributes = parse_root_attributes(root_node, None);
+    let footprint = parse_product_footprint(attributes);
+    (root_attributes, footprint)
+}
+
 pub fn render_inspector(ui: &mut egui::Ui, view: &InspectorView) {
     ui.monospace(&view.title);
     ui.separator();
 
+    if let Some(footprint) = &view.footprint {
+        render_footprint_map(ui, footprint);
+        ui.separator();
+    }
+
     if let Some(attributes) = &view.root_attributes {
         egui::CollapsingHeader::new("Product attributes")
-            .default_open(true)
+            .default_open(false)
             .show(ui, |ui| {
                 render_attribute_tree(ui, attributes, "root_attrs");
             });

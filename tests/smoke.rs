@@ -55,6 +55,25 @@ fn parses_root_attribute_tree() {
 
     let view = InspectorView::from_node(root, "sample");
     assert!(view.root_attributes.is_some());
+    assert!(view.footprint.is_some());
+}
+
+#[test]
+fn parses_product_footprint_from_sample() {
+    let path = std::path::Path::new("sample_data/S03OLCEFR_sample.zarr");
+    if !path.exists() {
+        return;
+    }
+
+    let store = open_store(path).expect("open store");
+    let root = &store.tree.root;
+    let ZarrNodeKind::Group { attributes, .. } = &root.kind else {
+        panic!("root group");
+    };
+
+    let footprint = copernicus_viewer::display::parse_product_footprint(attributes).expect("footprint");
+    assert!(footprint.west() < footprint.east());
+    assert!(footprint.south() < footprint.north());
 }
 
 #[test]

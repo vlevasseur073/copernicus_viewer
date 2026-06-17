@@ -80,6 +80,10 @@ fn render_attribute_node(ui: &mut egui::Ui, node: &AttributeNode, id_path: &str)
     }
 }
 
+pub fn merge_flat_attributes(attrs: &Map<String, Value>) -> Map<String, Value> {
+    merge_colon_keys(attrs)
+}
+
 fn merge_colon_keys(attrs: &Map<String, Value>) -> Map<String, Value> {
     let mut root = Map::new();
     for (key, value) in attrs {
