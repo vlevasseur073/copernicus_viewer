@@ -19,6 +19,8 @@ pub fn open_store(path: &Path) -> Result<ZarrStore> {
     let path = resolve_zarr_product_path(path);
     let storage = create_storage(&path)?;
     let root = Group::open(storage.clone(), "/").context("failed to open zarr root group")?;
+    // Traverses the hierarchy and reads group/array *metadata* (.zgroup, .zarray, .zattrs).
+    // Array chunk data is not read here; that happens in `plot::load_plot_data` on demand.
     let nodes = root
         .traverse()
         .context("failed to traverse zarr hierarchy")?;
@@ -109,5 +111,22 @@ mod tests {
     fn keeps_zip_path_unchanged() {
         let zip = PathBuf::from("/data/product.zarr.zip");
         assert_eq!(resolve_zarr_product_path(&zip), zip);
+    }
+
+    #[test]
+    fn open_store_builds_tree_without_reading_array_chunks() {
+        let path = Path::new("sample_data/S03OLCEFR_sample.zarr");
+        if !path.exists() {
+            return;
+        }
+
+        let store = open_store(path).expect("open store");
+        let array = store
+            .tree
+            .root
+            .find_by_path("/measurements/image/oa01_radiance")
+            .expect("array node in tree");
+        assert!(array.is_array());
+        // Chunk I/O is confined to plot::load_plot_data; opening only materializes metadata.
     }
 }

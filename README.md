@@ -31,7 +31,7 @@ sudo apt install libxkbcommon-x11-0 libgl1-mesa-dri
 
 Runtime for the GTK file dialog (optional build): `libgtk-3-0`.
 
-**Opening products:** **File → Open Zarr…** opens an in-app browser for `.zarr` directories and `.zarr.zip` archives — click or double-click a product, or paste a path and press **Open**. Use **System picker…** inside that dialog for the native file chooser; it automatically uses a folder picker for `.zarr` paths and a file picker for `.zip` paths.
+**Opening products:** **File → Open Zarr…** opens an in-app browser for `.zarr` directories and `.zarr.zip` archives — click or double-click a product, or paste a path and press **Open**. Use **System picker…** inside that dialog for the native file chooser; it automatically uses a folder picker for `.zarr` paths and a file picker for `.zip` paths. You can open several products at once; each appears as a top-level entry in the **Hierarchy** panel. Opening a product reads hierarchy metadata only; array values are loaded when you select a variable to plot.
 
 If the native dialog is empty or opens twice on WSL, rebuild with the GTK backend:
 
@@ -95,10 +95,10 @@ cargo run --example create_sample_zarr
 cargo run
 ```
 
-Use **File → Open Zarr…** to load an EOPF product. You can also pass a path on the command line:
+Use **File → Open Zarr…** to load additional EOPF products. Pass one or more paths on the command line:
 
 ```bash
-cargo run -- /path/to/product.zarr
+cargo run -- /path/to/product_a.zarr /path/to/product_b.zarr
 ```
 
 ## Releasing (maintainers)

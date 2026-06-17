@@ -18,7 +18,7 @@ fn main() -> eframe::Result<()> {
         }
     }
 
-    let path = std::env::args().nth(1).map(PathBuf::from);
+    let paths: Vec<PathBuf> = std::env::args().skip(1).map(PathBuf::from).collect();
 
     let options = eframe::NativeOptions {
         renderer: eframe::Renderer::Glow,
@@ -34,6 +34,6 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "Copernicus Viewer",
         options,
-        Box::new(move |cc| Ok(Box::new(app::CopernicusViewer::new(cc, path.clone())))),
+        Box::new(move |cc| Ok(Box::new(app::CopernicusViewer::new(cc, paths.clone())))),
     )
 }

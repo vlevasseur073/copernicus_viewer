@@ -7,7 +7,13 @@ use eframe::egui;
 
 use copernicus_viewer::display::{render_inspector, InspectorView};
 use copernicus_viewer::plot::{load_plot_data, shared_progress, PlotLoadResult, PlotPanel};
-use copernicus_viewer::zarr::{open_store, ZarrNodeKind, ZarrStore, ZarrTreeNode};
+use copernicus_viewer::zarr::{open_store, resolve_zarr_product_path, ZarrNodeKind, ZarrStore, ZarrTreeNode};
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct SelectedNode {
+    store_index: usize,
+    path: String,
+}
 
 #[derive(Default)]
 struct OpenProductDialog {
@@ -21,48 +27,53 @@ struct PendingNativeOpen {
 }
 
 enum LoadMessage {
-    StoreReady(Result<ZarrStore, String>),
+    StoreReady {
+        path: PathBuf,
+        result: Result<ZarrStore, String>,
+    },
     PlotProgress {
+        store_index: usize,
         path: String,
         fraction: f32,
         message: String,
     },
     PlotReady {
+        store_index: usize,
         path: String,
         result: Result<PlotLoadResult, String>,
     },
 }
 
 pub struct CopernicusViewer {
-    store: Option<Arc<ZarrStore>>,
-    selected_path: Option<String>,
+    stores: Vec<Arc<ZarrStore>>,
+    selected: Option<SelectedNode>,
     inspector: InspectorView,
     plot_panel: PlotPanel,
     status_message: String,
     load_tx: Sender<LoadMessage>,
     load_rx: Receiver<LoadMessage>,
-    pending_plot_path: Option<String>,
+    pending_plot: Option<(usize, String)>,
     pending_native_open: Option<PendingNativeOpen>,
     open_product_dialog: OpenProductDialog,
 }
 
 impl CopernicusViewer {
-    pub fn new(_cc: &eframe::CreationContext<'_>, initial_path: Option<PathBuf>) -> Self {
+    pub fn new(_cc: &eframe::CreationContext<'_>, initial_paths: Vec<PathBuf>) -> Self {
         let (load_tx, load_rx) = mpsc::channel();
         let mut app = Self {
-            store: None,
-            selected_path: None,
+            stores: Vec::new(),
+            selected: None,
             inspector: InspectorView::default(),
             plot_panel: PlotPanel::default(),
             status_message: String::new(),
             load_tx,
             load_rx,
-            pending_plot_path: None,
+            pending_plot: None,
             pending_native_open: None,
             open_product_dialog: OpenProductDialog::default(),
         };
 
-        if let Some(path) = initial_path {
+        for path in initial_paths {
             app.open_path(path);
         }
 
@@ -71,8 +82,8 @@ impl CopernicusViewer {
 
     fn show_open_product_dialog(&mut self) {
         let store_root = self
-            .store
-            .as_ref()
+            .stores
+            .last()
             .map(|store| PathBuf::from(&store.root_path));
         self.open_product_dialog.browser_dir = crate::file_browser::initial_browser_dir(
             &self.open_product_dialog.path,
@@ -91,23 +102,19 @@ impl CopernicusViewer {
     }
 
     fn open_path(&mut self, path: PathBuf) {
-        self.status_message = format!("Opening {}…", path.display());
-        self.store = None;
-        self.selected_path = None;
-        self.plot_panel.clear();
-        self.inspector = InspectorView {
-            title: path
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_else(|| "Loading".to_string()),
-            repr_body: "Loading…".to_string(),
-            ..Default::default()
-        };
+        let path = resolve_zarr_product_path(&path);
+        let root_path = path.display().to_string();
+        if self.stores.iter().any(|store| store.root_path == root_path) {
+            self.status_message = format!("Already open: {root_path}");
+            return;
+        }
+
+        self.status_message = format!("Opening {root_path}…");
 
         let tx = self.load_tx.clone();
         thread::spawn(move || {
             let result = open_store(&path).map_err(|e| e.to_string());
-            let _ = tx.send(LoadMessage::StoreReady(result));
+            let _ = tx.send(LoadMessage::StoreReady { path, result });
         });
     }
 
@@ -275,26 +282,29 @@ impl CopernicusViewer {
         }
     }
 
-    fn product_name(&self) -> String {
-        self.store
-            .as_ref()
-            .map(|s| {
-                PathBuf::from(&s.root_path)
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "product".to_string())
-            })
+    fn product_name(store: &ZarrStore) -> String {
+        PathBuf::from(&store.root_path)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "product".to_string())
     }
 
-    fn select_node(&mut self, node: &ZarrTreeNode) {
-        self.selected_path = Some(node.path.clone());
+    fn select_node(&mut self, store_index: usize, node: &ZarrTreeNode) {
+        self.selected = Some(SelectedNode {
+            store_index,
+            path: node.path.clone(),
+        });
 
-        let root = self.store.as_ref().map(|s| s.tree.root.clone());
+        let store = self.stores.get(store_index);
+        let root = store.map(|s| s.tree.root.clone());
+        let product_name = store
+            .as_ref()
+            .map(|s| Self::product_name(s))
+            .unwrap_or_else(|| "product".to_string());
         let mut inspector = if let Some(root) = &root {
-            InspectorView::from_node_with_root(node, &self.product_name(), Some(root))
+            InspectorView::from_node_with_root(node, &product_name, Some(root))
         } else {
-            InspectorView::from_node(node, &self.product_name())
+            InspectorView::from_node(node, &product_name)
         };
         if !matches!(node.kind, ZarrNodeKind::Array { .. }) {
             inspector.clear_array_extras();
@@ -303,20 +313,20 @@ impl CopernicusViewer {
 
         if let ZarrNodeKind::Array { shape, attributes, .. } = &node.kind {
             self.plot_panel.select_array(&node.path, shape, attributes);
-            self.pending_plot_path = Some(node.path.clone());
+            self.pending_plot = Some((store_index, node.path.clone()));
             self.request_plot_load();
         } else {
             self.plot_panel.clear();
-            self.pending_plot_path = None;
+            self.pending_plot = None;
         }
     }
 
     fn request_plot_load(&mut self) {
-        let Some(path) = self.pending_plot_path.clone() else {
+        let Some((store_index, path)) = self.pending_plot.clone() else {
             return;
         };
 
-        let Some(store) = self.store.clone() else {
+        let Some(store) = self.stores.get(store_index).cloned() else {
             return;
         };
 
@@ -344,10 +354,12 @@ impl CopernicusViewer {
 
         let (progress_tx, progress_rx) = mpsc::channel();
         let progress_forward_tx = tx.clone();
+        let progress_forward_store = store_index;
         let progress_forward_path = path_for_progress.clone();
         thread::spawn(move || {
             while let Ok((fraction, message)) = progress_rx.recv() {
                 let _ = progress_forward_tx.send(LoadMessage::PlotProgress {
+                    store_index: progress_forward_store,
                     path: progress_forward_path.clone(),
                     fraction,
                     message,
@@ -359,8 +371,18 @@ impl CopernicusViewer {
             let progress = shared_progress(progress_tx);
             let result =
                 load_plot_data(&storage, &tree, &kind, &request, Some(progress)).map_err(|e| e.to_string());
-            let _ = tx.send(LoadMessage::PlotReady { path, result });
+            let _ = tx.send(LoadMessage::PlotReady {
+                store_index,
+                path,
+                result,
+            });
         });
+    }
+
+    fn plot_is_current(&self, store_index: usize, path: &str) -> bool {
+        self.pending_plot
+            .as_ref()
+            .is_some_and(|(idx, p)| *idx == store_index && p == path)
     }
 
     fn poll_background_tasks(&mut self, ctx: &egui::Context) -> bool {
@@ -369,31 +391,40 @@ impl CopernicusViewer {
         while let Ok(msg) = self.load_rx.try_recv() {
             needs_repaint = true;
             match msg {
-                LoadMessage::StoreReady(Ok(store)) => {
-                    self.status_message = format!("Loaded {}", store.root_path);
-                    self.store = Some(Arc::new(store));
-                    self.select_node(&self.store.as_ref().unwrap().tree.root.clone());
-                }
-                LoadMessage::StoreReady(Err(err)) => {
-                    self.status_message = err.clone();
-                    self.inspector = InspectorView {
-                        title: "Error".to_string(),
-                        repr_body: err,
-                        ..Default::default()
-                    };
-                }
+                LoadMessage::StoreReady { path, result } => match result {
+                    Ok(store) => {
+                        let is_first = self.stores.is_empty();
+                        let root_path = store.root_path.clone();
+                        self.stores.push(Arc::new(store));
+                        let count = self.stores.len();
+                        self.status_message =
+                            format!("Loaded {root_path} ({count} product{} open)", if count == 1 { "" } else { "s" });
+                        if is_first {
+                            let root = self.stores[0].tree.root.clone();
+                            self.select_node(0, &root);
+                        }
+                    }
+                    Err(err) => {
+                        self.status_message = format!("Failed to open {}: {err}", path.display());
+                    }
+                },
                 LoadMessage::PlotProgress {
+                    store_index,
                     path,
                     fraction,
                     message,
                 } => {
-                    if self.pending_plot_path.as_deref() != Some(path.as_str()) {
+                    if !self.plot_is_current(store_index, &path) {
                         continue;
                     }
                     self.plot_panel.set_load_progress(fraction, &message);
                 }
-                LoadMessage::PlotReady { path, result } => {
-                    if self.pending_plot_path.as_deref() != Some(path.as_str()) {
+                LoadMessage::PlotReady {
+                    store_index,
+                    path,
+                    result,
+                } => {
+                    if !self.plot_is_current(store_index, &path) {
                         continue;
                     }
                     match result {
@@ -420,10 +451,16 @@ impl CopernicusViewer {
         needs_repaint
     }
 
-    fn tree_ui(&mut self, ui: &mut egui::Ui, node: &ZarrTreeNode) {
+    fn node_is_selected(&self, store_index: usize, node: &ZarrTreeNode) -> bool {
+        self.selected.as_ref().is_some_and(|sel| {
+            sel.store_index == store_index && sel.path == node.path
+        })
+    }
+
+    fn tree_ui(&mut self, ui: &mut egui::Ui, store_index: usize, node: &ZarrTreeNode) {
         if node.path == "/" {
             for child in &node.children {
-                self.tree_ui(ui, child);
+                self.tree_ui(ui, store_index, child);
             }
             return;
         }
@@ -446,25 +483,55 @@ impl CopernicusViewer {
             }
         };
 
+        let id = format!("{store_index}{}", node.path);
+
         if node.children.is_empty() {
-            let selected = self.selected_path.as_deref() == Some(node.path.as_str());
+            let selected = self.node_is_selected(store_index, node);
             let response = ui.selectable_label(selected, label);
             if response.clicked() || response.double_clicked() {
-                self.select_node(node);
+                self.select_node(store_index, node);
             }
         } else {
             let default_open = node.path == "/measurements" || node.path == "/conditions";
             let response = egui::CollapsingHeader::new(label)
-                .id_salt(&node.path)
+                .id_salt(id)
                 .default_open(default_open)
                 .show(ui, |ui| {
                     for child in &node.children {
-                        self.tree_ui(ui, child);
+                        self.tree_ui(ui, store_index, child);
                     }
                 });
 
             if response.header_response.double_clicked() {
-                self.select_node(node);
+                self.select_node(store_index, node);
+            }
+        }
+    }
+
+    fn products_tree_ui(&mut self, ui: &mut egui::Ui) {
+        if self.stores.is_empty() {
+            ui.label("No product loaded.");
+            return;
+        }
+
+        let products: Vec<(usize, String)> = self
+            .stores
+            .iter()
+            .enumerate()
+            .map(|(index, store)| (index, Self::product_name(store)))
+            .collect();
+
+        for (store_index, product_name) in products {
+            let root = self.stores[store_index].tree.root.clone();
+            let response = egui::CollapsingHeader::new(format!("📦 {product_name}"))
+                .id_salt(format!("product_{store_index}"))
+                .default_open(self.stores.len() <= 2)
+                .show(ui, |ui| {
+                    self.tree_ui(ui, store_index, &root);
+                });
+
+            if response.header_response.double_clicked() {
+                self.select_node(store_index, &root);
             }
         }
     }
@@ -525,12 +592,7 @@ impl eframe::App for CopernicusViewer {
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        if let Some(store) = &self.store {
-                            let root = store.tree.root.clone();
-                            self.tree_ui(ui, &root);
-                        } else {
-                            ui.label("No product loaded.");
-                        }
+                        self.products_tree_ui(ui);
                     });
             });
 
