@@ -29,6 +29,18 @@ If you use **X11 forwarding** to an external X server (VcXsrv, X410, …), insta
 sudo apt install libxkbcommon-x11-0 libgl1-mesa-dri
 ```
 
+Runtime for the GTK file dialog (optional build): `libgtk-3-0`.
+
+**Opening products:** **File → Open Zarr…** opens an in-app browser for `.zarr` directories and `.zarr.zip` archives — click or double-click a product, or paste a path and press **Open**. Use **System picker…** inside that dialog for the native file chooser; it automatically uses a folder picker for `.zarr` paths and a file picker for `.zip` paths.
+
+If the native dialog is empty or opens twice on WSL, rebuild with the GTK backend:
+
+```bash
+sudo apt install libgtk-3-dev
+cargo build --no-default-features --features dialog-gtk
+cargo run --no-default-features --features dialog-gtk
+```
+
 ### WSL2 graphics
 
 On WSL2 the app automatically selects **Mesa llvmpipe software rendering**, which is much more stable than ZINK/EGL when resizing windows over X11.

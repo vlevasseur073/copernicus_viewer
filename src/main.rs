@@ -1,4 +1,5 @@
 mod app;
+mod file_browser;
 mod platform;
 
 use std::path::PathBuf;

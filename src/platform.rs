@@ -111,3 +111,41 @@ fn force_env(key: &str, value: &str) {
         std::env::set_var(key, value);
     }
 }
+
+/// Which native picker to use for an EOPF Zarr product.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ZarrNativePick {
+    Directory,
+    ZipArchive,
+}
+
+/// Infer the native picker from a path hint (typed path or current selection).
+pub fn zarr_native_pick_for_hint(path_hint: &str) -> ZarrNativePick {
+    let trimmed = path_hint.trim();
+    if trimmed.ends_with(".zip") {
+        ZarrNativePick::ZipArchive
+    } else {
+        ZarrNativePick::Directory
+    }
+}
+
+/// Native picker for EOPF Zarr products. Must run on the main/UI thread.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn pick_zarr_product(frame: &eframe::Frame, kind: ZarrNativePick) -> Option<PathBuf> {
+    match kind {
+        ZarrNativePick::Directory => rfd::FileDialog::new()
+            .set_title("Select EOPF Zarr folder")
+            .set_parent(frame)
+            .pick_folder(),
+        ZarrNativePick::ZipArchive => rfd::FileDialog::new()
+            .set_title("Select EOPF Zarr zip archive")
+            .set_parent(frame)
+            .add_filter("Zarr zip archive", &["zip"])
+            .pick_file(),
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn pick_zarr_product(_frame: &eframe::Frame, _kind: ZarrNativePick) -> Option<PathBuf> {
+    None
+}

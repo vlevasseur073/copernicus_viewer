@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -16,7 +16,8 @@ pub struct ZarrStore {
 }
 
 pub fn open_store(path: &Path) -> Result<ZarrStore> {
-    let storage = create_storage(path)?;
+    let path = resolve_zarr_product_path(path);
+    let storage = create_storage(&path)?;
     let root = Group::open(storage.clone(), "/").context("failed to open zarr root group")?;
     let nodes = root
         .traverse()
@@ -29,6 +30,36 @@ pub fn open_store(path: &Path) -> Result<ZarrStore> {
         root_path: path.display().to_string(),
         tree,
     })
+}
+
+/// Normalize a user-selected path to the Zarr product root (.zarr directory or .zarr.zip file).
+pub fn resolve_zarr_product_path(path: &Path) -> PathBuf {
+    if path.is_file() {
+        return path.to_path_buf();
+    }
+
+    let mut current = path.to_path_buf();
+    loop {
+        if is_zarr_root(&current) {
+            return current;
+        }
+        if current
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with(".zarr"))
+        {
+            return current;
+        }
+        match current.parent() {
+            Some(parent) if parent != current.as_path() => current = parent.to_path_buf(),
+            _ => return path.to_path_buf(),
+        }
+    }
+}
+
+fn is_zarr_root(path: &Path) -> bool {
+    path.is_dir()
+        && (path.join(".zgroup").exists() || path.join(".zmetadata").exists())
 }
 
 fn create_storage(path: &Path) -> Result<ReadableListableStorage> {
@@ -59,4 +90,24 @@ fn create_storage(path: &Path) -> Result<ReadableListableStorage> {
         "expected a .zarr directory or .zarr.zip file, got: {}",
         path.display()
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolves_nested_path_to_zarr_root() {
+        let root = PathBuf::from("/data/product.zarr");
+        assert_eq!(
+            resolve_zarr_product_path(&root.join("measurements/image")),
+            root
+        );
+    }
+
+    #[test]
+    fn keeps_zip_path_unchanged() {
+        let zip = PathBuf::from("/data/product.zarr.zip");
+        assert_eq!(resolve_zarr_product_path(&zip), zip);
+    }
 }
