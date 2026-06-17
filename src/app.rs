@@ -654,7 +654,7 @@ impl eframe::App for CopernicusViewer {
                 });
                 ui.menu_button("Tools", |ui| {
                     if ui.button("Comparison…").clicked() {
-                        self.comparison.show();
+                        self.comparison.show(self.stores.len());
                         ui.close();
                     }
                 });
@@ -709,6 +709,6 @@ impl eframe::App for CopernicusViewer {
         });
 
         self.open_product_dialog_ui(ui.ctx());
-        self.comparison.ui(ui.ctx());
+        self.comparison.ui(ui.ctx(), &self.stores);
     }
 }
