@@ -289,6 +289,68 @@ impl CopernicusViewer {
             .unwrap_or_else(|| "product".to_string())
     }
 
+    fn close_product(&mut self, store_index: usize) {
+        if store_index >= self.stores.len() {
+            return;
+        }
+
+        let closed_name = Self::product_name(&self.stores[store_index]);
+        self.stores.remove(store_index);
+
+        let selection_was_closed = self
+            .selected
+            .as_ref()
+            .is_some_and(|sel| sel.store_index == store_index);
+
+        if let Some(sel) = &self.selected {
+            if sel.store_index > store_index {
+                self.selected = Some(SelectedNode {
+                    store_index: sel.store_index - 1,
+                    path: sel.path.clone(),
+                });
+            }
+        }
+
+        if let Some((idx, path)) = self.pending_plot.clone() {
+            if idx == store_index {
+                self.pending_plot = None;
+            } else if idx > store_index {
+                self.pending_plot = Some((idx - 1, path));
+            }
+        }
+
+        if selection_was_closed {
+            self.selected = None;
+            self.pending_plot = None;
+            self.plot_panel.clear();
+            self.inspector = InspectorView::default();
+
+            if let Some(store) = self.stores.first() {
+                let root = store.tree.root.clone();
+                self.select_node(0, &root);
+            }
+        }
+
+        let count = self.stores.len();
+        if count == 0 {
+            self.status_message = format!("Closed {closed_name}");
+        } else {
+            self.status_message = format!(
+                "Closed {closed_name} ({count} product{} open)",
+                if count == 1 { "" } else { "s" }
+            );
+        }
+    }
+
+    fn close_product_for_selection(&mut self) {
+        let index = self
+            .selected
+            .as_ref()
+            .map(|sel| sel.store_index)
+            .unwrap_or_else(|| self.stores.len().saturating_sub(1));
+        self.close_product(index);
+    }
+
     fn select_node(&mut self, store_index: usize, node: &ZarrTreeNode) {
         self.selected = Some(SelectedNode {
             store_index,
@@ -521,18 +583,34 @@ impl CopernicusViewer {
             .map(|(index, store)| (index, Self::product_name(store)))
             .collect();
 
+        let mut to_close: Option<usize> = None;
+
         for (store_index, product_name) in products {
             let root = self.stores[store_index].tree.root.clone();
-            let response = egui::CollapsingHeader::new(format!("📦 {product_name}"))
-                .id_salt(format!("product_{store_index}"))
-                .default_open(self.stores.len() <= 2)
-                .show(ui, |ui| {
-                    self.tree_ui(ui, store_index, &root);
-                });
+            ui.horizontal(|ui| {
+                if ui
+                    .small_button("✕")
+                    .on_hover_text("Close product")
+                    .clicked()
+                {
+                    to_close = Some(store_index);
+                }
 
-            if response.header_response.double_clicked() {
-                self.select_node(store_index, &root);
-            }
+                let response = egui::CollapsingHeader::new(format!("📦 {product_name}"))
+                    .id_salt(format!("product_{store_index}"))
+                    .default_open(self.stores.len() <= 2)
+                    .show(ui, |ui| {
+                        self.tree_ui(ui, store_index, &root);
+                    });
+
+                if response.header_response.double_clicked() {
+                    self.select_node(store_index, &root);
+                }
+            });
+        }
+
+        if let Some(store_index) = to_close {
+            self.close_product(store_index);
         }
     }
 }
@@ -561,6 +639,12 @@ impl eframe::App for CopernicusViewer {
                         self.show_open_product_dialog();
                         ui.close();
                     }
+                    ui.add_enabled_ui(!self.stores.is_empty(), |ui| {
+                        if ui.button("Close product").clicked() {
+                            self.close_product_for_selection();
+                            ui.close();
+                        }
+                    });
                     if ui.button("Quit").clicked() {
                         ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                     }
