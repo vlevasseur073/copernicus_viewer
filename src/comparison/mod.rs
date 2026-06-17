@@ -1,6 +1,11 @@
 //! Side-by-side and difference views across open EOPF Zarr products.
 
+mod array_io;
 mod compare;
+mod data;
+mod flags;
+mod options;
+mod structure;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -9,7 +14,7 @@ use eframe::egui;
 
 use crate::zarr::ZarrStore;
 
-pub use compare::{compare_products, ComparisonResult};
+pub use compare::{compare_products, compare_products_with_options, ComparisonOptions, ComparisonResult};
 
 /// Comparison workspace: pick two open products and run [`compare_products`].
 #[derive(Default)]
@@ -44,14 +49,14 @@ impl ComparisonTool {
         egui::Window::new("Comparison")
             .collapsible(true)
             .resizable(true)
-            .default_width(520.0)
-            .default_height(360.0)
+            .default_width(640.0)
+            .default_height(480.0)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .open(&mut keep_open)
             .show(ctx, |ui| {
                 ui.heading("Comparison");
                 ui.separator();
-                ui.label("Select two open products to compare:");
+                ui.label("Select reference (A) and new product (B):");
 
                 if stores.len() < 2 {
                     ui.add_space(8.0);
@@ -65,9 +70,9 @@ impl ComparisonTool {
                 ui.add_space(8.0);
                 let mut left_index = self.left_index;
                 let mut right_index = self.right_index;
-                Self::product_selector(ui, stores, "Product A", &mut left_index);
+                Self::product_selector(ui, stores, "Product A (reference)", &mut left_index);
                 ui.add_space(4.0);
-                Self::product_selector(ui, stores, "Product B", &mut right_index);
+                Self::product_selector(ui, stores, "Product B (new)", &mut right_index);
                 self.left_index = left_index;
                 self.right_index = right_index;
 
@@ -92,7 +97,29 @@ impl ComparisonTool {
                 if let Some(result) = &self.result {
                     ui.add_space(12.0);
                     ui.separator();
-                    ui.label(&result.summary);
+                    let color = if result.success {
+                        egui::Color32::LIGHT_GREEN
+                    } else {
+                        egui::Color32::LIGHT_RED
+                    };
+                    ui.colored_label(
+                        color,
+                        if result.success {
+                            "PASSED"
+                        } else {
+                            "FAILED"
+                        },
+                    );
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .max_height(260.0)
+                        .show(ui, |ui| {
+                            ui.add(
+                                egui::TextEdit::multiline(&mut result.summary.clone())
+                                    .desired_width(f32::INFINITY)
+                                    .interactive(false),
+                            );
+                        });
                 }
             });
         self.open = keep_open;

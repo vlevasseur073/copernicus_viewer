@@ -92,6 +92,9 @@ Verify downloads with the `SHA256SUMS.txt` file attached to each release.
 # Optional: generate a local sample product for testing
 cargo run --example create_sample_zarr
 
+# Compare two products from the CLI (reference vs new)
+cargo run --example compare_products -- reference.zarr new.zarr
+
 cargo run
 ```
 

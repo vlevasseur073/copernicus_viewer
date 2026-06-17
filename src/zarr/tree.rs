@@ -227,3 +227,39 @@ fn normalize_path(path: &str) -> String {
         format!("/{path}")
     }
 }
+
+impl ZarrTreeNode {
+    /// Visit every node except the synthetic root `/`.
+    pub fn visit_nodes(&self, f: &mut impl FnMut(&ZarrTreeNode)) {
+        for child in &self.children {
+            child.visit_nodes_inner(f);
+        }
+    }
+
+    fn visit_nodes_inner(&self, f: &mut impl FnMut(&ZarrTreeNode)) {
+        f(self);
+        for child in &self.children {
+            child.visit_nodes_inner(f);
+        }
+    }
+
+    /// Sorted hierarchy paths for groups and arrays (excluding `/`).
+    pub fn collect_paths(&self) -> Vec<String> {
+        let mut paths = Vec::new();
+        self.visit_nodes(&mut |node| paths.push(node.path.clone()));
+        paths.sort();
+        paths
+    }
+
+    /// Whether this tree has the same node paths as another (isomorphic layout).
+    pub fn is_isomorphic_to(&self, other: &ZarrTreeNode) -> bool {
+        self.collect_paths() == other.collect_paths()
+    }
+
+    pub fn is_empty_array(&self) -> bool {
+        matches!(
+            &self.kind,
+            ZarrNodeKind::Array { shape, .. } if shape.iter().any(|&dim| dim == 0)
+        )
+    }
+}
