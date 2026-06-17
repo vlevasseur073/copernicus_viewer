@@ -5,23 +5,27 @@ use std::thread;
 
 use eframe::egui;
 
-use copernicus_viewer::display::format_node_repr;
-use copernicus_viewer::plot::{load_plot_data, PlotData, PlotPanel};
+use copernicus_viewer::display::{render_inspector, InspectorView};
+use copernicus_viewer::plot::{load_plot_data, shared_progress, PlotLoadResult, PlotPanel};
 use copernicus_viewer::zarr::{open_store, ZarrNodeKind, ZarrStore, ZarrTreeNode};
 
 enum LoadMessage {
     StoreReady(Result<ZarrStore, String>),
+    PlotProgress {
+        path: String,
+        fraction: f32,
+        message: String,
+    },
     PlotReady {
         path: String,
-        result: Result<PlotData, String>,
+        result: Result<PlotLoadResult, String>,
     },
 }
 
 pub struct CopernicusViewer {
     store: Option<Arc<ZarrStore>>,
     selected_path: Option<String>,
-    info_text: String,
-    info_title: String,
+    inspector: InspectorView,
     plot_panel: PlotPanel,
     status_message: String,
     load_tx: Sender<LoadMessage>,
@@ -35,8 +39,7 @@ impl CopernicusViewer {
         let mut app = Self {
             store: None,
             selected_path: None,
-            info_text: "Open an EOPF Zarr product to begin.".to_string(),
-            info_title: "Copernicus Viewer".to_string(),
+            inspector: InspectorView::default(),
             plot_panel: PlotPanel::default(),
             status_message: String::new(),
             load_tx,
@@ -56,11 +59,14 @@ impl CopernicusViewer {
         self.store = None;
         self.selected_path = None;
         self.plot_panel.clear();
-        self.info_text = "Loading…".to_string();
-        self.info_title = path
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "Loading".to_string());
+        self.inspector = InspectorView {
+            title: path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "Loading".to_string()),
+            repr_body: "Loading…".to_string(),
+            ..Default::default()
+        };
 
         let tx = self.load_tx.clone();
         thread::spawn(move || {
@@ -83,11 +89,8 @@ impl CopernicusViewer {
         }
     }
 
-    fn select_node(&mut self, node: &ZarrTreeNode) {
-        self.selected_path = Some(node.path.clone());
-
-        let product_name = self
-            .store
+    fn product_name(&self) -> String {
+        self.store
             .as_ref()
             .map(|s| {
                 PathBuf::from(&s.root_path)
@@ -95,14 +98,25 @@ impl CopernicusViewer {
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_else(|| "product".to_string())
             })
-            .unwrap_or_else(|| "product".to_string());
+            .unwrap_or_else(|| "product".to_string())
+    }
 
-        let repr = format_node_repr(node, &product_name);
-        self.info_title = repr.title;
-        self.info_text = repr.body;
+    fn select_node(&mut self, node: &ZarrTreeNode) {
+        self.selected_path = Some(node.path.clone());
 
-        if let ZarrNodeKind::Array { shape, .. } = &node.kind {
-            self.plot_panel.select_array(&node.path, shape);
+        let root = self.store.as_ref().map(|s| s.tree.root.clone());
+        let mut inspector = if let Some(root) = &root {
+            InspectorView::from_node_with_root(node, &self.product_name(), Some(root))
+        } else {
+            InspectorView::from_node(node, &self.product_name())
+        };
+        if !matches!(node.kind, ZarrNodeKind::Array { .. }) {
+            inspector.clear_array_extras();
+        }
+        self.inspector = inspector;
+
+        if let ZarrNodeKind::Array { shape, attributes, .. } = &node.kind {
+            self.plot_panel.select_array(&node.path, shape, attributes);
             self.pending_plot_path = Some(node.path.clone());
             self.request_plot_load();
         } else {
@@ -132,15 +146,33 @@ impl CopernicusViewer {
             copernicus_viewer::plot::PlotRequest {
                 array_path: path.clone(),
                 slice_indices: self.plot_panel.slice_indices().to_vec(),
+                flag_selection: self.plot_panel.flag_selection(),
             }
         });
 
         let kind = node.kind.clone();
         let storage = store.storage.clone();
+        let tree = store.tree.root.clone();
         let tx = self.load_tx.clone();
+        let path_for_progress = path.clone();
+
+        let (progress_tx, progress_rx) = mpsc::channel();
+        let progress_forward_tx = tx.clone();
+        let progress_forward_path = path_for_progress.clone();
+        thread::spawn(move || {
+            while let Ok((fraction, message)) = progress_rx.recv() {
+                let _ = progress_forward_tx.send(LoadMessage::PlotProgress {
+                    path: progress_forward_path.clone(),
+                    fraction,
+                    message,
+                });
+            }
+        });
 
         thread::spawn(move || {
-            let result = load_plot_data(&storage, &kind, &request).map_err(|e| e.to_string());
+            let progress = shared_progress(progress_tx);
+            let result =
+                load_plot_data(&storage, &tree, &kind, &request, Some(progress)).map_err(|e| e.to_string());
             let _ = tx.send(LoadMessage::PlotReady { path, result });
         });
     }
@@ -158,15 +190,32 @@ impl CopernicusViewer {
                 }
                 LoadMessage::StoreReady(Err(err)) => {
                     self.status_message = err.clone();
-                    self.info_title = "Error".to_string();
-                    self.info_text = err;
+                    self.inspector = InspectorView {
+                        title: "Error".to_string(),
+                        repr_body: err,
+                        ..Default::default()
+                    };
+                }
+                LoadMessage::PlotProgress {
+                    path,
+                    fraction,
+                    message,
+                } => {
+                    if self.pending_plot_path.as_deref() != Some(path.as_str()) {
+                        continue;
+                    }
+                    self.plot_panel.set_load_progress(fraction, &message);
                 }
                 LoadMessage::PlotReady { path, result } => {
                     if self.pending_plot_path.as_deref() != Some(path.as_str()) {
                         continue;
                     }
                     match result {
-                        Ok(data) => self.plot_panel.set_plot_data(data),
+                        Ok(loaded) => {
+                            self.inspector
+                                .set_array_extras(loaded.stats.clone(), loaded.preview.clone());
+                            self.plot_panel.set_load_result(loaded);
+                        }
                         Err(err) => self.plot_panel.set_error(err),
                     }
                 }
@@ -237,7 +286,6 @@ impl CopernicusViewer {
 
 impl eframe::App for CopernicusViewer {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        // Skip rendering while the window is minimized or mid-resize (zero-area viewport).
         let area = ui.clip_rect().size();
         if area.x < 8.0 || area.y < 8.0 {
             return;
@@ -298,18 +346,11 @@ impl eframe::App for CopernicusViewer {
             .show_inside(ui, |ui| {
                 ui.heading("Inspector");
                 ui.separator();
-                ui.monospace(&self.info_title);
-                ui.separator();
 
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        ui.add(
-                            egui::TextEdit::multiline(&mut self.info_text.as_str())
-                                .font(egui::TextStyle::Monospace)
-                                .desired_width(f32::INFINITY)
-                                .interactive(false),
-                        );
+                        render_inspector(ui, &self.inspector);
                     });
             });
 

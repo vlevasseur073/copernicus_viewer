@@ -87,6 +87,10 @@ pub fn build_tree(nodes: &[(NodePath, NodeMetadata)]) -> ZarrTree {
     ZarrTree { root }
 }
 
+pub fn apply_root_metadata(tree: &mut ZarrTree, meta: &GroupMetadata) {
+    tree.root.kind = group_kind(meta);
+}
+
 fn insert_node(
     root: &mut ZarrTreeNode,
     parent_path: &str,

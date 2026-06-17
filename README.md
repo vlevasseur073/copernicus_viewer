@@ -7,7 +7,11 @@ A Rust GUI application to explore and visualize [EOPF](https://cpm.pages.eopf.co
 - Open EOPF Zarr stores (`.zarr` directories or `.zarr.zip` archives)
 - Browse the product hierarchy (groups and variables) in a tree view
 - Inspect metadata with an xarray-inspired representation (DataTree / Group / DataArray with attributes)
-- Plot selected variables (1D line plots, 2D heatmaps; higher-dimensional arrays via slice controls)
+- **Product attributes** tree for root metadata (nested STAC / EOPF attributes, foldable like the hierarchy)
+- **Statistics and data preview** tables in the inspector for loaded array subsets
+- **Async plot loading** with progress bar for large arrays
+- **Geo-referenced plotting**: coordinate arrays, CRS, and axis extent labels on heatmaps
+- **CF flag variables** with `flag_meanings` and `flag_values` / `flag_masks` (bitmask plots per flag)
 
 ## Requirements
 

@@ -7,7 +7,7 @@ use zarrs::group::Group;
 use zarrs::storage::{ReadableListableStorage, StoreKey};
 use zarrs_zip::ZipStorageAdapter;
 
-use super::tree::{build_tree, ZarrTree};
+use super::tree::{apply_root_metadata, build_tree, ZarrTree};
 
 pub struct ZarrStore {
     pub storage: ReadableListableStorage,
@@ -21,7 +21,8 @@ pub fn open_store(path: &Path) -> Result<ZarrStore> {
     let nodes = root
         .traverse()
         .context("failed to traverse zarr hierarchy")?;
-    let tree = build_tree(&nodes);
+    let mut tree = build_tree(&nodes);
+    apply_root_metadata(&mut tree, root.metadata());
 
     Ok(ZarrStore {
         storage,
