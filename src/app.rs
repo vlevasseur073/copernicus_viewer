@@ -5,6 +5,7 @@ use std::thread;
 
 use eframe::egui;
 
+use copernicus_viewer::comparison::ComparisonTool;
 use copernicus_viewer::display::{render_inspector, InspectorView};
 use copernicus_viewer::plot::{load_plot_data, shared_progress, PlotLoadResult, PlotPanel};
 use copernicus_viewer::zarr::{open_store, resolve_zarr_product_path, ZarrNodeKind, ZarrStore, ZarrTreeNode};
@@ -55,6 +56,7 @@ pub struct CopernicusViewer {
     pending_plot: Option<(usize, String)>,
     pending_native_open: Option<PendingNativeOpen>,
     open_product_dialog: OpenProductDialog,
+    comparison: ComparisonTool,
 }
 
 impl CopernicusViewer {
@@ -71,6 +73,7 @@ impl CopernicusViewer {
             pending_plot: None,
             pending_native_open: None,
             open_product_dialog: OpenProductDialog::default(),
+            comparison: ComparisonTool::default(),
         };
 
         for path in initial_paths {
@@ -649,6 +652,12 @@ impl eframe::App for CopernicusViewer {
                         ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });
+                ui.menu_button("Tools", |ui| {
+                    if ui.button("Comparison…").clicked() {
+                        self.comparison.show();
+                        ui.close();
+                    }
+                });
             });
         });
 
@@ -700,5 +709,6 @@ impl eframe::App for CopernicusViewer {
         });
 
         self.open_product_dialog_ui(ui.ctx());
+        self.comparison.ui(ui.ctx());
     }
 }
