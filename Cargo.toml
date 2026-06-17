@@ -1,0 +1,28 @@
+[package]
+name = "copernicus_viewer"
+version = "0.1.0"
+edition = "2021"
+description = "GUI viewer for EOPF Zarr products"
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "copernicus_viewer"
+path = "src/lib.rs"
+
+[[bin]]
+name = "copernicus_viewer"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+eframe = { version = "0.34", default-features = false, features = ["default_fonts", "glow", "x11", "wayland"] }
+egui = "0.34"
+egui_plot = "0.35"
+env_logger = "0.11"
+log = "0.4"
+ndarray = "0.17"
+rfd = "0.15"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+zarrs = { version = "0.23", features = ["filesystem", "ndarray", "blosc", "zstd", "gzip", "transpose"] }
+zarrs_zip = "0.5"
