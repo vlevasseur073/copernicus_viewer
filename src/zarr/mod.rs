@@ -1,3 +1,5 @@
+pub mod creds;
+pub mod error;
 pub mod store;
 pub mod tree;
 
