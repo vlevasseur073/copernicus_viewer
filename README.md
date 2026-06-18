@@ -15,6 +15,35 @@ A Rust GUI application to explore and visualize [EOPF](https://cpm.pages.eopf.co
 - **Coverage map** in the inspector — adaptive Plate Carrée view (zooms to regional tiles, global view for wide footprints) with Natural Earth coastlines
 - **Product comparison** (**Tools → Comparison**) — compare a reference and a new product (structure, variable data, CF flags) with user-defined thresholds and a pass/fail report; same logic via the `compare_products` example
 
+## Quick start
+
+This walkthrough opens a reference and a new EOPF product side by side (the screenshots below use Sentinel-3 SLSTR LST data). Pass your own `.zarr` paths:
+
+```bash
+cargo run -- /path/to/reference.zarr /path/to/new.zarr
+```
+
+Both products appear in the **Hierarchy** panel. Select **`measurements/lst`** to inspect metadata, view the coverage map, and plot the land-surface temperature heatmap:
+
+![Explore SLSTR LST — hierarchy, inspector, and geo-referenced heatmap](docs/screenshots/01-explore-lst.png)
+
+Open **Tools → Comparison**, pick the reference and new product, then run the check. The report lists structure, variable, and flag differences — here four auxiliary variables differ while 64 measurement variables pass:
+
+![Product comparison — reference vs reprocessed SLSTR LST](docs/screenshots/02-comparison.png)
+
+The same comparison logic is available from the CLI:
+
+```bash
+cargo run --example compare_products -- /path/to/reference.zarr /path/to/new.zarr
+```
+
+To regenerate the README screenshots (maintainers):
+
+```bash
+COPERNICUS_VIEWER_CAPTURE_DEMO=docs/screenshots cargo run -- \
+  /path/to/reference.zarr /path/to/new.zarr
+```
+
 ## Requirements
 
 - Rust 1.75+

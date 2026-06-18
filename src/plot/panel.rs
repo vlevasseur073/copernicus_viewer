@@ -110,6 +110,10 @@ impl PlotPanel {
         self.load_progress = None;
     }
 
+    pub fn is_plot_ready(&self) -> bool {
+        self.plot_data.is_some() && self.load_progress.is_none()
+    }
+
     pub fn ui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         ui.heading("Plot");
         ui.separator();

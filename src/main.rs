@@ -1,4 +1,5 @@
 mod app;
+mod demo_capture;
 mod file_browser;
 mod platform;
 

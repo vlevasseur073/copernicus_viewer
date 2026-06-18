@@ -57,6 +57,7 @@ pub struct CopernicusViewer {
     pending_native_open: Option<PendingNativeOpen>,
     open_product_dialog: OpenProductDialog,
     comparison: ComparisonTool,
+    demo_capture: Option<crate::demo_capture::DemoCapture>,
 }
 
 impl CopernicusViewer {
@@ -74,6 +75,7 @@ impl CopernicusViewer {
             pending_native_open: None,
             open_product_dialog: OpenProductDialog::default(),
             comparison: ComparisonTool::default(),
+            demo_capture: crate::demo_capture::DemoCapture::from_env(),
         };
 
         for path in initial_paths {
@@ -619,6 +621,35 @@ impl CopernicusViewer {
 }
 
 impl eframe::App for CopernicusViewer {
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if let Some(demo) = &mut self.demo_capture {
+            demo.handle_events(ctx);
+            let action = demo.tick(
+                ctx,
+                &self.stores,
+                &self.plot_panel,
+                &self.comparison,
+            );
+            match action {
+                Some(crate::demo_capture::DemoAction::SelectLst) => {
+                    if let Some(node) = self.stores[0]
+                        .tree
+                        .root
+                        .find_by_path("/measurements/lst")
+                        .cloned()
+                    {
+                        self.select_node(0, &node);
+                    }
+                }
+                Some(crate::demo_capture::DemoAction::RunComparison) => {
+                    self.comparison.open_and_compare(0, 1, &self.stores);
+                }
+                Some(crate::demo_capture::DemoAction::Close) => {}
+                None => {}
+            }
+        }
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let area = ui.clip_rect().size();
         if area.x <= 0.0 || area.y <= 0.0 {

@@ -57,6 +57,24 @@ impl ComparisonTool {
         self.clamp_indices(store_count);
     }
 
+    pub fn open_and_compare(&mut self, left: usize, right: usize, stores: &[Arc<ZarrStore>]) {
+        self.open = true;
+        self.left_index = left;
+        self.right_index = right;
+        self.clamp_indices(stores.len());
+        if left < stores.len() && right < stores.len() && left != right {
+            self.result = Some(compare_products_with_options(
+                &stores[left],
+                &stores[right],
+                &self.options,
+            ));
+        }
+    }
+
+    pub fn has_result(&self) -> bool {
+        self.result.is_some()
+    }
+
     pub fn ui(&mut self, ctx: &egui::Context, stores: &[Arc<ZarrStore>]) {
         if !self.open {
             return;
