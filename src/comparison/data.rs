@@ -16,9 +16,16 @@ pub struct VariableComparison {
     pub mean: f64,
     pub std: f64,
     pub median: f64,
+    pub mse: f64,
+    pub psnr: f64,
+    pub outlier_count: u64,
+    pub valid_pixels: u64,
+    pub total_pixels: u64,
+    pub coverage_diff: i64,
     pub outlier_ratio: f64,
     pub coverage_diff_ratio: f64,
     pub relative_mode: bool,
+    pub threshold: f64,
     pub chunks_compared: usize,
 }
 
@@ -145,9 +152,16 @@ fn compare_one_variable(
         mean: stats.mean,
         std: stats.std,
         median: stats.median,
+        mse: stats.mse,
+        psnr: stats.psnr,
+        outlier_count: stats.outlier_count,
+        valid_pixels: stats.valid_pixels,
+        total_pixels: stats.total,
+        coverage_diff: stats.coverage_diff,
         outlier_ratio: stats.outlier_ratio,
         coverage_diff_ratio: stats.coverage_diff_ratio,
         relative_mode,
+        threshold,
         chunks_compared,
     }))
 }
@@ -158,6 +172,10 @@ struct StatsAccumulator {
     ref_valid: u64,
     new_valid: u64,
     total: u64,
+    mse_sum: f64,
+    mse_count: u64,
+    new_min: f64,
+    new_max: f64,
 }
 
 impl StatsAccumulator {
@@ -169,11 +187,20 @@ impl StatsAccumulator {
             }
             if n.is_finite() {
                 self.new_valid += 1;
+                if self.mse_count == 0 {
+                    self.new_min = n;
+                    self.new_max = n;
+                } else {
+                    self.new_min = self.new_min.min(n);
+                    self.new_max = self.new_max.max(n);
+                }
             }
             if !r.is_finite() || !n.is_finite() {
                 continue;
             }
             let diff = n - r;
+            self.mse_sum += diff * diff;
+            self.mse_count += 1;
             let err = if relative_mode {
                 if r.abs() > f64::EPSILON {
                     diff / r
@@ -198,6 +225,10 @@ impl StatsAccumulator {
             self.ref_valid,
             self.new_valid,
             self.total,
+            self.mse_sum,
+            self.mse_count,
+            self.new_min,
+            self.new_max,
             threshold,
             threshold_nb_outliers,
             threshold_coverage,
@@ -212,8 +243,21 @@ struct StatsOutcome {
     mean: f64,
     std: f64,
     median: f64,
+    mse: f64,
+    psnr: f64,
+    outlier_count: u64,
+    valid_pixels: u64,
+    total: u64,
+    coverage_diff: i64,
     outlier_ratio: f64,
     coverage_diff_ratio: f64,
+}
+
+fn compute_psnr(mse: f64, sq_max_value: f64) -> f64 {
+    if mse <= 0.0 || !mse.is_finite() {
+        return f64::INFINITY;
+    }
+    20.0 * (sq_max_value / mse).log10()
 }
 
 fn compute_stats_from_errors(
@@ -221,15 +265,31 @@ fn compute_stats_from_errors(
     ref_valid: u64,
     new_valid: u64,
     total: u64,
+    mse_sum: f64,
+    mse_count: u64,
+    new_min: f64,
+    new_max: f64,
     threshold: f64,
     threshold_nb_outliers: f64,
     threshold_coverage: f64,
 ) -> StatsOutcome {
+    let coverage_diff = new_valid as i64 - ref_valid as i64;
     let coverage_diff_ratio = if total == 0 {
         0.0
     } else {
-        (new_valid as f64 - ref_valid as f64) / total as f64
+        coverage_diff as f64 / total as f64
     };
+    let mse = if mse_count == 0 {
+        f64::NAN
+    } else {
+        mse_sum / mse_count as f64
+    };
+    let sq_max_value = if mse_count == 0 {
+        0.0
+    } else {
+        (new_max - new_min).powi(2)
+    };
+    let psnr = compute_psnr(mse, sq_max_value);
 
     if err_values.is_empty() {
         return StatsOutcome {
@@ -239,6 +299,12 @@ fn compute_stats_from_errors(
             mean: f64::NAN,
             std: f64::NAN,
             median: f64::NAN,
+            mse,
+            psnr,
+            outlier_count: 0,
+            valid_pixels: 0,
+            total,
+            coverage_diff,
             outlier_ratio: 0.0,
             coverage_diff_ratio,
         };
@@ -260,7 +326,12 @@ fn compute_stats_from_errors(
     let std = variance.sqrt();
     let median = sorted[sorted.len() / 2];
     let outlier_count = err_values.iter().filter(|&&v| v.abs() > threshold).count() as u64;
-    let outlier_ratio = outlier_count as f64 / err_values.len() as f64;
+    let valid_pixels = err_values.len() as u64;
+    let outlier_ratio = if valid_pixels == 0 {
+        0.0
+    } else {
+        outlier_count as f64 / valid_pixels as f64
+    };
 
     let passed = outlier_ratio <= threshold_nb_outliers
         && coverage_diff_ratio.abs() <= threshold_coverage;
@@ -272,6 +343,12 @@ fn compute_stats_from_errors(
         mean,
         std,
         median,
+        mse,
+        psnr,
+        outlier_count,
+        valid_pixels,
+        total,
+        coverage_diff,
         outlier_ratio,
         coverage_diff_ratio,
     }
@@ -325,4 +402,60 @@ pub fn global_relative_score(report: &DataReport) -> Option<f64> {
     scores.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     let median = scores[scores.len() / 2];
     Some(100.0 - (median * 100.0).abs())
+}
+
+/// Format variable statistics like sentineltoolbox `_get_failed_formatted_string_vars`.
+pub fn format_variable_detail(
+    var: &VariableComparison,
+    threshold_nb_outliers: f64,
+    threshold_coverage: f64,
+) -> String {
+    let outlier_pct = if var.valid_pixels == 0 {
+        0.0
+    } else {
+        var.outlier_count as f64 / var.valid_pixels as f64 * 100.0
+    };
+    let coverage_pct = if var.total_pixels == 0 {
+        0.0
+    } else {
+        var.coverage_diff as f64 / var.total_pixels as f64 * 100.0
+    };
+
+    let base = if var.relative_mode {
+        format!(
+            "{}: min={:8.4}% max={:8.4}% mean={:8.4}% stdev={:8.4}% median={:8.4}% \
+             mse={:9.6} psnr={:9.6}dB -- eps={:.6}%",
+            var.path,
+            var.min * 100.0,
+            var.max * 100.0,
+            var.mean * 100.0,
+            var.std * 100.0,
+            var.median * 100.0,
+            var.mse,
+            var.psnr,
+            var.threshold * 100.0,
+        )
+    } else {
+        format!(
+            "{}: min={:9.6} max={:9.6} mean={:9.6} stdev={:9.6} median={:9.6} \
+             mse={:9.6} psnr={:9.6}dB -- eps={:.6}",
+            var.path,
+            var.min,
+            var.max,
+            var.mean,
+            var.std,
+            var.median,
+            var.mse,
+            var.psnr,
+            var.threshold,
+        )
+    };
+
+    format!(
+        "{base} outliers={} (={outlier_pct:.3}% allowed={:.3}%) \
+         coverage={coverage_pct:+.3}% (allowed={:.3}%)",
+        var.outlier_count,
+        threshold_nb_outliers * 100.0,
+        threshold_coverage * 100.0,
+    )
 }

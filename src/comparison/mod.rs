@@ -16,12 +16,31 @@ use crate::zarr::ZarrStore;
 
 pub use compare::{compare_products, compare_products_with_options, ComparisonOptions, ComparisonResult};
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ErrorMode {
+    Relative,
+    Absolute,
+    Auto,
+}
+
+impl ErrorMode {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Relative => "Relative (all variables)",
+            Self::Absolute => "Absolute (all variables)",
+            Self::Auto => "Auto (from scale_factor)",
+        }
+    }
+}
+
 /// Comparison workspace: pick two open products and run [`compare_products`].
 #[derive(Default)]
 pub struct ComparisonTool {
     open: bool,
     left_index: usize,
     right_index: usize,
+    options: ComparisonOptions,
+    verbose: bool,
     result: Option<ComparisonResult>,
 }
 
@@ -50,7 +69,7 @@ impl ComparisonTool {
             .collapsible(true)
             .resizable(true)
             .default_width(640.0)
-            .default_height(480.0)
+            .default_height(560.0)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .open(&mut keep_open)
             .show(ctx, |ui| {
@@ -85,12 +104,16 @@ impl ComparisonTool {
                     );
                 }
 
+                ui.add_space(8.0);
+                Self::options_ui(ui, &mut self.options, &mut self.verbose);
+
                 ui.add_space(12.0);
                 ui.add_enabled_ui(!same_product, |ui| {
                     if ui.button("Compare").clicked() {
                         let left = &stores[self.left_index];
                         let right = &stores[self.right_index];
-                        self.result = Some(compare_products(left, right));
+                        self.result =
+                            Some(compare_products_with_options(left, right, &self.options));
                     }
                 });
 
@@ -110,12 +133,13 @@ impl ComparisonTool {
                             "FAILED"
                         },
                     );
+                    let mut report = result.formatted_summary(self.verbose);
                     egui::ScrollArea::vertical()
                         .auto_shrink([false, false])
                         .max_height(260.0)
                         .show(ui, |ui| {
                             ui.add(
-                                egui::TextEdit::multiline(&mut result.summary.clone())
+                                egui::TextEdit::multiline(&mut report)
                                     .desired_width(f32::INFINITY)
                                     .interactive(false),
                             );
@@ -140,6 +164,111 @@ impl ComparisonTool {
                     ui.selectable_value(index, i, product_label(store));
                 }
             });
+    }
+
+    fn options_ui(ui: &mut egui::Ui, options: &mut ComparisonOptions, verbose: &mut bool) {
+        egui::CollapsingHeader::new("Options")
+            .default_open(false)
+            .show(ui, |ui| {
+                ui.label("Compare");
+                ui.horizontal(|ui| {
+                    ui.checkbox(&mut options.structure, "Structure / metadata");
+                    ui.checkbox(&mut options.data, "Variable data");
+                    ui.checkbox(&mut options.flags, "Flags / masks");
+                });
+                ui.add_enabled_ui(options.structure, |ui| {
+                    ui.checkbox(&mut options.chunks, "Chunk layout");
+                });
+
+                ui.add_space(4.0);
+                ui.label("Error mode");
+                Self::error_mode_selector(ui, options);
+
+                ui.add_space(4.0);
+                ui.label("Thresholds");
+                egui::Grid::new("comparison_thresholds")
+                    .num_columns(2)
+                    .spacing([12.0, 4.0])
+                    .show(ui, |ui| {
+                        ui.label("Data threshold");
+                        ui.add(
+                            egui::DragValue::new(&mut options.threshold)
+                                .speed(0.000001)
+                                .range(0.0..=f64::MAX),
+                        );
+                        ui.end_row();
+
+                        ui.label("Packed threshold factor");
+                        ui.add(
+                            egui::DragValue::new(&mut options.threshold_packed)
+                                .speed(0.01)
+                                .range(0.0..=f64::MAX),
+                        );
+                        ui.end_row();
+
+                        ui.label("Max outlier ratio");
+                        ui.add(
+                            egui::DragValue::new(&mut options.threshold_nb_outliers)
+                                .speed(0.001)
+                                .range(0.0..=1.0)
+                                .fixed_decimals(4),
+                        );
+                        ui.end_row();
+
+                        ui.label("Max coverage difference");
+                        ui.add(
+                            egui::DragValue::new(&mut options.threshold_coverage)
+                                .speed(0.001)
+                                .range(0.0..=1.0)
+                                .fixed_decimals(4),
+                        );
+                        ui.end_row();
+                    });
+
+                ui.add_space(4.0);
+                ui.checkbox(verbose, "Verbose report (list all variables and flag bits)");
+            });
+    }
+
+    fn error_mode_selector(ui: &mut egui::Ui, options: &mut ComparisonOptions) {
+        let mode = if options.relative {
+            ErrorMode::Relative
+        } else if options.absolute {
+            ErrorMode::Absolute
+        } else {
+            ErrorMode::Auto
+        };
+        let mut selected = mode;
+        egui::ComboBox::from_id_salt("comparison_error_mode")
+            .selected_text(selected.label())
+            .width(ui.available_width())
+            .show_ui(ui, |ui| {
+                ui.selectable_value(
+                    &mut selected,
+                    ErrorMode::Relative,
+                    ErrorMode::Relative.label(),
+                );
+                ui.selectable_value(
+                    &mut selected,
+                    ErrorMode::Absolute,
+                    ErrorMode::Absolute.label(),
+                );
+                ui.selectable_value(&mut selected, ErrorMode::Auto, ErrorMode::Auto.label());
+            });
+        match selected {
+            ErrorMode::Relative => {
+                options.relative = true;
+                options.absolute = false;
+            }
+            ErrorMode::Absolute => {
+                options.relative = false;
+                options.absolute = true;
+            }
+            ErrorMode::Auto => {
+                options.relative = false;
+                options.absolute = false;
+            }
+        }
     }
 
     fn clamp_indices(&mut self, store_count: usize) {

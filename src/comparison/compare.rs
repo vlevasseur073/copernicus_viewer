@@ -2,7 +2,7 @@
 
 use crate::zarr::ZarrStore;
 
-use super::data::{compare_variable_data, global_relative_score, DataReport};
+use super::data::{compare_variable_data, format_variable_detail, global_relative_score, DataReport};
 use super::flags::{compare_flag_variables, global_flag_score as median_flag_score, FlagReport};
 use super::options::CompareOptions;
 use super::structure::{
@@ -27,6 +27,8 @@ pub struct ComparisonResult {
     pub flags: FlagReport,
     pub global_score: Option<f64>,
     pub global_flag_score: Option<f64>,
+    pub threshold_nb_outliers: f64,
+    pub threshold_coverage: f64,
 }
 
 impl ComparisonResult {
@@ -73,6 +75,8 @@ fn compare_product_trees(
             flags: FlagReport::default(),
             global_score: None,
             global_flag_score: None,
+            threshold_nb_outliers: options.threshold_nb_outliers,
+            threshold_coverage: options.threshold_coverage,
         };
         return ComparisonResult {
             summary: result.formatted_summary(false),
@@ -129,6 +133,8 @@ fn compare_product_trees(
         flags,
         global_score,
         global_flag_score,
+        threshold_nb_outliers: options.threshold_nb_outliers,
+        threshold_coverage: options.threshold_coverage,
     };
     result.summary = result.formatted_summary(false);
     result
@@ -230,10 +236,8 @@ fn format_summary(result: &ComparisonResult, verbose: bool) -> String {
 
     for var in failed_vars.iter().take(failed_limit) {
         lines.push(format!(
-            "  ✗ {} — outliers {:.2}%, coverage Δ {:.2}%",
-            var.path,
-            var.outlier_ratio * 100.0,
-            var.coverage_diff_ratio * 100.0
+            "  ✗ {}",
+            format_variable_detail(var, result.threshold_nb_outliers, result.threshold_coverage)
         ));
     }
     if failed_vars.len() > failed_limit {
@@ -250,7 +254,14 @@ fn format_summary(result: &ComparisonResult, verbose: bool) -> String {
     }
 
     for var in passed_vars.iter().take(passed_limit) {
-        lines.push(format!("  ✓ {}", var.path));
+        if verbose {
+            lines.push(format!(
+                "  ✓ {}",
+                format_variable_detail(var, result.threshold_nb_outliers, result.threshold_coverage)
+            ));
+        } else {
+            lines.push(format!("  ✓ {}", var.path));
+        }
     }
     if passed_vars.len() > passed_limit {
         lines.push(format!(
