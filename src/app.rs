@@ -60,7 +60,7 @@ pub struct CopernicusViewer {
 }
 
 impl CopernicusViewer {
-    pub fn new(_cc: &eframe::CreationContext<'_>, initial_paths: Vec<PathBuf>) -> Self {
+    pub fn new(initial_paths: Vec<PathBuf>) -> Self {
         let (load_tx, load_rx) = mpsc::channel();
         let mut app = Self {
             stores: Vec::new(),
@@ -621,7 +621,7 @@ impl CopernicusViewer {
 impl eframe::App for CopernicusViewer {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let area = ui.clip_rect().size();
-        if area.x < 8.0 || area.y < 8.0 {
+        if area.x <= 0.0 || area.y <= 0.0 {
             return;
         }
 
