@@ -46,11 +46,9 @@ fn parse_geometry_rings(geometry: &Value) -> Vec<LandRing> {
     let coordinates = geometry.get("coordinates");
 
     match (geometry_type, coordinates) {
-        ("Polygon", Some(Value::Array(rings))) => rings
-            .first()
-            .and_then(|ring| build_ring(ring))
-            .into_iter()
-            .collect(),
+        ("Polygon", Some(Value::Array(rings))) => {
+            rings.first().and_then(build_ring).into_iter().collect()
+        }
         ("MultiPolygon", Some(Value::Array(polygons))) => polygons
             .iter()
             .filter_map(|polygon| polygon.as_array()?.first())

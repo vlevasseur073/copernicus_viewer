@@ -1,7 +1,7 @@
 use egui::{Color32, ColorImage, Pos2, Rect};
 
 use super::land::land_rings;
-use super::render::{graticule_step, project, MapView, OCEAN, LAND};
+use super::render::{graticule_step, project, MapView, LAND, OCEAN};
 
 pub fn rasterize_basemap(view: MapView, width: usize, height: usize) -> ColorImage {
     let mut pixels = vec![OCEAN; width * height];
@@ -42,7 +42,11 @@ fn draw_graticule_pixels(
 
     let mut lat = (view.min_lat / lat_step).floor() * lat_step;
     while lat <= view.max_lat + f64::EPSILON {
-        let color = if lat.abs() < f64::EPSILON { major } else { minor };
+        let color = if lat.abs() < f64::EPSILON {
+            major
+        } else {
+            minor
+        };
         let y = project(view.min_lon, lat, rect, view).y.round() as i32;
         if (0..height as i32).contains(&y) {
             draw_h_line(pixels, width, height, y, color);
@@ -89,7 +93,13 @@ fn draw_h_line(pixels: &mut [Color32], width: usize, _height: usize, y: i32, col
     row.fill(color);
 }
 
-fn fill_polygon(pixels: &mut [Color32], width: usize, height: usize, points: &[Pos2], fill: Color32) {
+fn fill_polygon(
+    pixels: &mut [Color32],
+    width: usize,
+    height: usize,
+    points: &[Pos2],
+    fill: Color32,
+) {
     if points.len() < 3 {
         return;
     }

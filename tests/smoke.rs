@@ -1,5 +1,7 @@
-use copernicus_viewer::display::{parse_root_attributes, InspectorView, AttributeNode};
-use copernicus_viewer::plot::{load_plot_data, parse_cf_flags, FlagSelection, PlotData, PlotRequest};
+use copernicus_viewer::display::{parse_root_attributes, AttributeNode, InspectorView};
+use copernicus_viewer::plot::{
+    load_plot_data, parse_cf_flags, FlagSelection, PlotData, PlotRequest,
+};
 use copernicus_viewer::zarr::{open_store, ZarrNodeKind};
 
 #[test]
@@ -71,7 +73,8 @@ fn parses_product_footprint_from_sample() {
         panic!("root group");
     };
 
-    let footprint = copernicus_viewer::display::parse_product_footprint(attributes).expect("footprint");
+    let footprint =
+        copernicus_viewer::display::parse_product_footprint(attributes).expect("footprint");
     assert!(footprint.west() < footprint.east());
     assert!(footprint.south() < footprint.north());
 }

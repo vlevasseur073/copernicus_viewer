@@ -8,7 +8,9 @@ use eframe::egui;
 use copernicus_viewer::comparison::ComparisonTool;
 use copernicus_viewer::display::{render_inspector, InspectorView};
 use copernicus_viewer::plot::{load_plot_data, shared_progress, PlotLoadResult, PlotPanel};
-use copernicus_viewer::zarr::{open_store, resolve_zarr_product_path, ZarrNodeKind, ZarrStore, ZarrTreeNode};
+use copernicus_viewer::zarr::{
+    open_store, resolve_zarr_product_path, ZarrNodeKind, ZarrStore, ZarrTreeNode,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct SelectedNode {
@@ -194,8 +196,7 @@ impl CopernicusViewer {
                     Ok(items) if items.is_empty() => {
                         ui.add_space(8.0);
                         ui.label(
-                            egui::RichText::new("No .zarr folders or zip archives here.")
-                                .weak(),
+                            egui::RichText::new("No .zarr folders or zip archives here.").weak(),
                         );
                     }
                     Ok(items) => {
@@ -215,9 +216,9 @@ impl CopernicusViewer {
                                             } else {
                                                 format!("📁  {name}")
                                             };
-                                            let selected = selected_path == path.display().to_string();
-                                            let response =
-                                                ui.selectable_label(selected, label);
+                                            let selected =
+                                                selected_path == path.display().to_string();
+                                            let response = ui.selectable_label(selected, label);
                                             if response.clicked() {
                                                 selected_path = path.display().to_string();
                                                 self.open_product_dialog.path =
@@ -239,9 +240,9 @@ impl CopernicusViewer {
                                             path,
                                         } => {
                                             let label = format!("🗜  {name}");
-                                            let selected = selected_path == path.display().to_string();
-                                            let response =
-                                                ui.selectable_label(selected, label);
+                                            let selected =
+                                                selected_path == path.display().to_string();
+                                            let response = ui.selectable_label(selected, label);
                                             if response.clicked() {
                                                 selected_path = path.display().to_string();
                                                 self.open_product_dialog.path =
@@ -266,9 +267,7 @@ impl CopernicusViewer {
                     let can_open = !self.open_product_dialog.path.trim().is_empty();
                     ui.add_enabled_ui(can_open, |ui| {
                         if ui.button("Open").clicked() {
-                            submit_path = Some(PathBuf::from(
-                                self.open_product_dialog.path.trim(),
-                            ));
+                            submit_path = Some(PathBuf::from(self.open_product_dialog.path.trim()));
                             keep_open = false;
                         }
                     });
@@ -378,7 +377,10 @@ impl CopernicusViewer {
         }
         self.inspector = inspector;
 
-        if let ZarrNodeKind::Array { shape, attributes, .. } = &node.kind {
+        if let ZarrNodeKind::Array {
+            shape, attributes, ..
+        } = &node.kind
+        {
             self.plot_panel.select_array(&node.path, shape, attributes);
             self.pending_plot = Some((store_index, node.path.clone()));
             self.request_plot_load();
@@ -436,8 +438,8 @@ impl CopernicusViewer {
 
         thread::spawn(move || {
             let progress = shared_progress(progress_tx);
-            let result =
-                load_plot_data(&storage, &tree, &kind, &request, Some(progress)).map_err(|e| e.to_string());
+            let result = load_plot_data(&storage, &tree, &kind, &request, Some(progress))
+                .map_err(|e| e.to_string());
             let _ = tx.send(LoadMessage::PlotReady {
                 store_index,
                 path,
@@ -464,8 +466,10 @@ impl CopernicusViewer {
                         let root_path = store.root_path.clone();
                         self.stores.push(Arc::new(store));
                         let count = self.stores.len();
-                        self.status_message =
-                            format!("Loaded {root_path} ({count} product{} open)", if count == 1 { "" } else { "s" });
+                        self.status_message = format!(
+                            "Loaded {root_path} ({count} product{} open)",
+                            if count == 1 { "" } else { "s" }
+                        );
                         if is_first {
                             let root = self.stores[0].tree.root.clone();
                             self.select_node(0, &root);
@@ -519,9 +523,9 @@ impl CopernicusViewer {
     }
 
     fn node_is_selected(&self, store_index: usize, node: &ZarrTreeNode) -> bool {
-        self.selected.as_ref().is_some_and(|sel| {
-            sel.store_index == store_index && sel.path == node.path
-        })
+        self.selected
+            .as_ref()
+            .is_some_and(|sel| sel.store_index == store_index && sel.path == node.path)
     }
 
     fn tree_ui(&mut self, ui: &mut egui::Ui, store_index: usize, node: &ZarrTreeNode) {
@@ -624,12 +628,7 @@ impl eframe::App for CopernicusViewer {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if let Some(demo) = &mut self.demo_capture {
             demo.handle_events(ctx);
-            let action = demo.tick(
-                ctx,
-                &self.stores,
-                &self.plot_panel,
-                &self.comparison,
-            );
+            let action = demo.tick(ctx, &self.stores, &self.plot_panel, &self.comparison);
             match action {
                 Some(crate::demo_capture::DemoAction::SelectLst) => {
                     if let Some(node) = self.stores[0]

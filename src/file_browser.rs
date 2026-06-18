@@ -124,9 +124,7 @@ pub fn list_directory(dir: &Path) -> Result<Vec<BrowserItem>, String> {
 }
 
 pub fn is_zarr_product_dir(name: &str, path: &Path) -> bool {
-    name.ends_with(".zarr")
-        || path.join(".zgroup").exists()
-        || path.join(".zmetadata").exists()
+    name.ends_with(".zarr") || path.join(".zgroup").exists() || path.join(".zmetadata").exists()
 }
 
 pub fn is_zarr_zip(name: &str) -> bool {

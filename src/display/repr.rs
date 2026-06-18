@@ -65,12 +65,7 @@ fn format_group_repr(
             } = &child.kind
             {
                 let dims = format_dims(shape, dimension_names);
-                lines.push(format!(
-                    "    {}  ({}) {}",
-                    child.name,
-                    dims,
-                    dtype
-                ));
+                lines.push(format!("    {}  ({}) {}", child.name, dims, dtype));
             }
         }
         lines.push(String::new());
@@ -83,7 +78,10 @@ fn format_group_repr(
 
     append_attributes(&mut lines, attributes);
 
-    NodeRepr { title, body: lines.join("\n") }
+    NodeRepr {
+        title,
+        body: lines.join("\n"),
+    }
 }
 
 fn format_array_repr(
@@ -124,7 +122,10 @@ fn format_array_repr(
 
     append_attributes(&mut lines, attributes);
 
-    NodeRepr { title, body: lines.join("\n") }
+    NodeRepr {
+        title,
+        body: lines.join("\n"),
+    }
 }
 
 fn format_dimension_lines(shape: &[u64], dimension_names: &[String]) -> Vec<String> {
@@ -154,7 +155,13 @@ fn format_dims(shape: &[u64], dimension_names: &[String]) -> String {
     dimension_names
         .iter()
         .take(shape.len())
-        .map(|n| if n == "_" { "dim".to_string() } else { n.clone() })
+        .map(|n| {
+            if n == "_" {
+                "dim".to_string()
+            } else {
+                n.clone()
+            }
+        })
         .collect::<Vec<_>>()
         .join(", ")
 }

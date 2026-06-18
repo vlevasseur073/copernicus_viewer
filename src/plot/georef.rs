@@ -57,12 +57,18 @@ pub fn resolve_georef(
     let y_coords = resolve_coord(storage, tree, &parent, &y_name, Y_ALIASES, y_range)?;
     let x_coords = resolve_coord(storage, tree, &parent, &x_name, X_ALIASES, x_range)?;
 
-    let y_unit = y_coords
-        .as_ref()
-        .and_then(|(_, attrs)| attrs.get("units").and_then(|v| v.as_str()).map(str::to_string));
-    let x_unit = x_coords
-        .as_ref()
-        .and_then(|(_, attrs)| attrs.get("units").and_then(|v| v.as_str()).map(str::to_string));
+    let y_unit = y_coords.as_ref().and_then(|(_, attrs)| {
+        attrs
+            .get("units")
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+    });
+    let x_unit = x_coords.as_ref().and_then(|(_, attrs)| {
+        attrs
+            .get("units")
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+    });
 
     Ok(GeorefInfo {
         crs,
@@ -144,7 +150,13 @@ fn read_coord_array(
         return Ok(None);
     };
 
-    let ZarrNodeKind::Array { dtype, attributes, shape, .. } = &node.kind else {
+    let ZarrNodeKind::Array {
+        dtype,
+        attributes,
+        shape,
+        ..
+    } = &node.kind
+    else {
         return Ok(None);
     };
 

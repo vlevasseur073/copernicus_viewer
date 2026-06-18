@@ -45,7 +45,12 @@ impl PlotPanel {
         self.flag_selection
     }
 
-    pub fn select_array(&mut self, path: &str, shape: &[u64], attributes: &Map<String, serde_json::Value>) {
+    pub fn select_array(
+        &mut self,
+        path: &str,
+        shape: &[u64],
+        attributes: &Map<String, serde_json::Value>,
+    ) {
         self.array_path = Some(path.to_string());
         self.texture = None;
         self.texture_key = None;
@@ -243,7 +248,11 @@ impl PlotPanel {
                 .width(280.0)
                 .show_ui(ui, |ui| {
                     if ui
-                        .selectable_value(&mut self.flag_selection, FlagSelection::Raw, "Raw values")
+                        .selectable_value(
+                            &mut self.flag_selection,
+                            FlagSelection::Raw,
+                            "Raw values",
+                        )
                         .clicked()
                     {
                         changed = true;
@@ -308,9 +317,7 @@ impl PlotPanel {
             })
             .collect();
 
-        let x_label = georef
-            .map(|g| g.x_name.as_str())
-            .unwrap_or("index");
+        let x_label = georef.map(|g| g.x_name.as_str()).unwrap_or("index");
         let y_label = label;
 
         Plot::new("line_plot")
@@ -471,9 +478,5 @@ fn viridis_color(t: f32) -> Color32 {
     let r = (0.267 + t * (0.993 - 0.267)).clamp(0.0, 1.0);
     let g = (0.004 + t * (0.906 - 0.004)).clamp(0.0, 1.0);
     let b = (0.329 + t * (0.143 - 0.329)).clamp(0.0, 1.0);
-    Color32::from_rgb(
-        (r * 255.0) as u8,
-        (g * 255.0) as u8,
-        (b * 255.0) as u8,
-    )
+    Color32::from_rgb((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8)
 }

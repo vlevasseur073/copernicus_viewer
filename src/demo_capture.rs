@@ -120,7 +120,10 @@ impl DemoCapture {
     pub fn handle_events(&mut self, ctx: &egui::Context) {
         let events: Vec<Event> = ctx.input(|input| input.events.clone());
         for event in events {
-            let Event::Screenshot { user_data, image, .. } = event else {
+            let Event::Screenshot {
+                user_data, image, ..
+            } = event
+            else {
                 continue;
             };
             let Some(filename) = user_data

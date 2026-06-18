@@ -48,10 +48,7 @@ pub fn parse_product_footprint(attrs: &Map<String, Value>) -> Option<ProductFoot
     }
 
     let merged = merge_flat_attributes(attrs);
-    let fallback_id = attrs
-        .get("id")
-        .and_then(|v| v.as_str())
-        .map(str::to_string);
+    let fallback_id = attrs.get("id").and_then(|v| v.as_str()).map(str::to_string);
 
     for item in stac_item_candidates(&merged, attrs) {
         if let Some(footprint) = footprint_from_stac_item(item, fallback_id.clone()) {
@@ -211,7 +208,10 @@ fn parse_geometry(value: &Value) -> Option<([f64; 4], Option<Vec<[f64; 2]>>)> {
             for polygon in coordinates.as_array()? {
                 let ring = polygon.as_array()?.first()?.as_array()?;
                 let parsed = parse_ring(ring)?;
-                if best.as_ref().is_none_or(|existing| parsed.len() > existing.len()) {
+                if best
+                    .as_ref()
+                    .is_none_or(|existing| parsed.len() > existing.len())
+                {
                     best = Some(parsed);
                 }
             }
@@ -360,22 +360,14 @@ mod tests {
         .clone();
 
         let footprint = parse_product_footprint(&attrs).expect("footprint");
-        assert_eq!(
-            footprint.bbox,
-            [-91.8195, 28.6875, -72.8128, 41.9988]
-        );
-        assert_eq!(
-            footprint.product_id.as_deref(),
-            Some("S03SLSRBT_sample")
-        );
+        assert_eq!(footprint.bbox, [-91.8195, 28.6875, -72.8128, 41.9988]);
+        assert_eq!(footprint.product_id.as_deref(), Some("S03SLSRBT_sample"));
         assert!(footprint.polygon.is_some());
     }
 
     #[test]
     fn parses_real_product_footprint_if_present() {
-        let path = std::path::Path::new(
-            "/tmp/S03SLSRBT_20230509T154335_0180_B168_SB28.zarr",
-        );
+        let path = std::path::Path::new("/tmp/S03SLSRBT_20230509T154335_0180_B168_SB28.zarr");
         if !path.exists() {
             return;
         }

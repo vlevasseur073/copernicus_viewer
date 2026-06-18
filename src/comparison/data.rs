@@ -333,8 +333,8 @@ fn compute_stats_from_errors(
         outlier_count as f64 / valid_pixels as f64
     };
 
-    let passed = outlier_ratio <= threshold_nb_outliers
-        && coverage_diff_ratio.abs() <= threshold_coverage;
+    let passed =
+        outlier_ratio <= threshold_nb_outliers && coverage_diff_ratio.abs() <= threshold_coverage;
 
     StatsOutcome {
         passed,

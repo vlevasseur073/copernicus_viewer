@@ -60,8 +60,7 @@ pub fn resolve_zarr_product_path(path: &Path) -> PathBuf {
 }
 
 fn is_zarr_root(path: &Path) -> bool {
-    path.is_dir()
-        && (path.join(".zgroup").exists() || path.join(".zmetadata").exists())
+    path.is_dir() && (path.join(".zgroup").exists() || path.join(".zmetadata").exists())
 }
 
 fn create_storage(path: &Path) -> Result<ReadableListableStorage> {

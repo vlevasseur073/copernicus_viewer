@@ -7,10 +7,7 @@ use zarrs::array::ArraySubset;
 use zarrs::storage::ReadableListableStorage;
 
 /// Chunk boundaries aligned on the reference product's chunk grid.
-pub fn iter_reference_chunk_subsets(
-    shape: &[u64],
-    ref_chunks: &[u64],
-) -> Vec<Vec<Range<u64>>> {
+pub fn iter_reference_chunk_subsets(shape: &[u64], ref_chunks: &[u64]) -> Vec<Vec<Range<u64>>> {
     let chunks = effective_chunks(shape, ref_chunks);
     let per_dim: Vec<Vec<Range<u64>>> = shape
         .iter()
@@ -124,7 +121,9 @@ fn read_subset_as_f64(
         ($t:ty) => {{
             let arr: ArrayD<$t> = array
                 .retrieve_array_subset::<ArrayD<$t>>(subset)
-                .with_context(|| format!("failed to read array as {}", std::any::type_name::<$t>()))?;
+                .with_context(|| {
+                    format!("failed to read array as {}", std::any::type_name::<$t>())
+                })?;
             return Ok(arr.mapv(|v| v as f64));
         }};
     }

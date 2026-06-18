@@ -68,7 +68,13 @@ pub fn load_plot_data(
 
     report(0.05, "Opening array…");
 
-    let ZarrNodeKind::Array { shape, dtype, attributes, .. } = kind else {
+    let ZarrNodeKind::Array {
+        shape,
+        dtype,
+        attributes,
+        ..
+    } = kind
+    else {
         anyhow::bail!("only arrays can be plotted");
     };
 
@@ -78,8 +84,7 @@ pub fn load_plot_data(
         .with_context(|| format!("failed to open array at {}", request.array_path))?;
 
     report(0.15, "Building read subset…");
-    let (subset_ranges, y_range, x_range) =
-        build_subset(shape, &request.slice_indices)?;
+    let (subset_ranges, y_range, x_range) = build_subset(shape, &request.slice_indices)?;
     let array_subset = ArraySubset::new_with_ranges(&subset_ranges);
 
     report(0.35, "Reading array data…");
@@ -95,15 +100,7 @@ pub fn load_plot_data(
     let preview = build_preview(&values, 8, 8);
 
     report(0.80, "Resolving geospatial metadata…");
-    let georef = resolve_georef(
-        storage,
-        tree,
-        &request.array_path,
-        kind,
-        &y_range,
-        &x_range,
-    )
-    .ok();
+    let georef = resolve_georef(storage, tree, &request.array_path, kind, &y_range, &x_range).ok();
 
     report(0.92, "Preparing plot…");
     let plot = plot_from_values(
@@ -132,7 +129,11 @@ pub fn load_plot_data(
 fn build_subset(
     shape: &[u64],
     slice_indices: &[usize],
-) -> Result<(Vec<std::ops::Range<u64>>, std::ops::Range<u64>, std::ops::Range<u64>)> {
+) -> Result<(
+    Vec<std::ops::Range<u64>>,
+    std::ops::Range<u64>,
+    std::ops::Range<u64>,
+)> {
     if shape.is_empty() {
         return Ok((vec![0..1], 0..1, 0..1));
     }
@@ -334,9 +335,7 @@ fn flag_suffix(flags: Option<&CfFlags>, flag_selection: FlagSelection) -> String
 }
 
 /// Helper to share progress updates from a background thread.
-pub fn shared_progress(
-    tx: std::sync::mpsc::Sender<(f32, String)>,
-) -> ProgressCallback {
+pub fn shared_progress(tx: std::sync::mpsc::Sender<(f32, String)>) -> ProgressCallback {
     Arc::new(move |fraction, message| {
         let _ = tx.send((fraction, message.to_string()));
     })
