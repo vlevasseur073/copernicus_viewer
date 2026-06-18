@@ -13,11 +13,12 @@ A Rust GUI application to explore and visualize [EOPF](https://cpm.pages.eopf.co
 - **Geo-referenced plotting**: coordinate arrays, CRS, and axis extent labels on heatmaps
 - **CF flag variables** with `flag_meanings` and `flag_values` / `flag_masks` (bitmask plots per flag)
 - **Coverage map** in the inspector — adaptive Plate Carrée view (zooms to regional tiles, global view for wide footprints) with Natural Earth coastlines
+- **Product comparison** (**Tools → Comparison**) — compare a reference and a new product (structure, variable data, CF flags) with user-defined thresholds and a pass/fail report; same logic via the `compare_products` example
 
 ## Requirements
 
 - Rust 1.75+
-- OpenGL support for the GUI (uses the **Glow** OpenGL backend)
+- GPU support for the GUI (**wgpu** on Linux desktop, macOS, and Windows; **Glow**/OpenGL on WSL2 — see [WSL2 graphics](#wsl2-graphics))
 
 ### WSL2 / Linux system packages
 
@@ -43,23 +44,33 @@ cargo run --no-default-features --features dialog-gtk
 
 ### WSL2 graphics
 
-On WSL2 the app automatically selects **Mesa llvmpipe software rendering**, which is much more stable than ZINK/EGL when resizing windows over X11.
+The app picks a renderer from your WSL environment (override with `COPERNICUS_VIEWER_GL`):
 
-You can override this:
+| Environment | Default | Backend |
+|-------------|---------|---------|
+| WSLg (Wayland) | GPU OpenGL | Glow |
+| WSL + X11 forwarding | Mesa llvmpipe (software) | Glow |
+| Linux desktop / macOS / Windows | GPU | wgpu |
+
+On **WSLg** (`WAYLAND_DISPLAY` set), the default is **Glow with GPU acceleration**. Mesa llvmpipe is not compatible with WSLg/Wayland.
+
+On **WSL over X11** (VcXsrv, X410, …), the default is **Glow with Mesa llvmpipe** software rendering, which is much more stable than ZINK/EGL when resizing windows. Vsync is disabled on this path; the app sets `LIBGL_ALWAYS_SOFTWARE=1` and related Mesa env vars automatically.
 
 ```bash
-# Force software (default on WSL)
+# Force Mesa llvmpipe + Glow (X11 only; on WSLg falls back to GPU Glow with a warning)
 COPERNICUS_VIEWER_GL=software cargo run
 
-# Try native GPU (WSLg only — may crash on X11 forwarding)
+# GPU: Glow on WSL, wgpu elsewhere
 COPERNICUS_VIEWER_GL=hardware cargo run
+
+# Force wgpu everywhere (expert — may fail on WSL with EGL/ZINK errors)
+COPERNICUS_VIEWER_GL=wgpu cargo run
+
+# Explicit auto-detection (same as unset)
+COPERNICUS_VIEWER_GL=auto cargo run
 ```
 
-If problems persist, also try:
-
-```bash
-LIBGL_ALWAYS_SOFTWARE=1 cargo run
-```
+`native` is an alias for `wgpu`.
 
 ## Install
 
@@ -70,7 +81,7 @@ cargo install copernicus_viewer
 copernicus_viewer
 ```
 
-Requires a Rust toolchain and OpenGL support (same as [Requirements](#requirements)).
+Requires a Rust toolchain and GPU support (same as [Requirements](#requirements)).
 
 ### Prebuilt binaries (GitHub Releases)
 
