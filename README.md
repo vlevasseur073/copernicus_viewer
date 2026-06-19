@@ -61,7 +61,7 @@ sudo apt install libxkbcommon-x11-0 libgl1-mesa-dri
 
 Runtime for the GTK file dialog (optional build): `libgtk-3-0`.
 
-**Opening products:** **File → Open Zarr…** opens an in-app browser for local `.zarr` directories and `.zarr.zip` archives — click or double-click a product, or paste a path and press **Open**. You can also paste an `s3://bucket/path/product.zarr` URI to open a remote product (see [S3 object storage](#s3-object-storage) below). Use **System picker…** inside that dialog for the native file chooser; it automatically uses a folder picker for `.zarr` paths and a file picker for `.zip` paths. You can open several products at once; each appears as a top-level entry in the **Hierarchy** panel. Close one with **✕** next to its name or **File → Close product**. Opening a product reads hierarchy metadata only; array values are loaded when you select a variable to plot.
+**Opening products:** **File → Open Zarr…** opens an in-app browser for local `.zarr` directories and `.zarr.zip` archives — click or double-click a product, or paste a path and press **Open**. Use **S3** in that dialog to browse configured buckets and prefixes on object storage (see [S3 object storage](#s3-object-storage)). You can also paste an `s3://bucket/path/product.zarr` URI directly. Use **System picker…** for the native file chooser on local paths; it automatically uses a folder picker for `.zarr` paths and a file picker for `.zip` paths. You can open several products at once; each appears as a top-level entry in the **Hierarchy** panel. Close one with **✕** next to its name or **File → Close product**. Opening a product reads hierarchy metadata only; array values are loaded when you select a variable to plot.
 
 If the native dialog is empty or opens twice on WSL, rebuild with the GTK backend:
 
@@ -147,7 +147,7 @@ cargo run -- s3://my-eopf-bucket/eopf/products/S03OLCEFR_202309.zarr
 
 ## S3 object storage
 
-Remote EOPF Zarr directory stores on AWS S3 (including custom endpoints) can be opened with an `s3://` URI from the command line or by pasting the URI in **File → Open Zarr…**. The in-app directory browser remains local-only.
+Remote EOPF Zarr directory stores on AWS S3 (including custom endpoints) can be opened with an `s3://` URI from the command line or by pasting the URI in **File → Open Zarr…**. You can also browse remote products in that dialog: click **S3** to list buckets from your config file, then navigate prefixes and double-click a `.zarr` product to open it. Use **Local** to return to filesystem browsing. The in-app directory listing for local paths is unchanged.
 
 ### Credentials
 

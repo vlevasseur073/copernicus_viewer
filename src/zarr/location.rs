@@ -107,7 +107,7 @@ fn normalize_prefix(prefix: &str) -> String {
     prefix.trim_matches('/').to_string()
 }
 
-fn format_s3_uri(bucket: &str, prefix: &str) -> String {
+pub fn format_s3_uri(bucket: &str, prefix: &str) -> String {
     if prefix.is_empty() {
         format!("s3://{bucket}")
     } else {
@@ -115,7 +115,7 @@ fn format_s3_uri(bucket: &str, prefix: &str) -> String {
     }
 }
 
-fn parent_prefix(prefix: &str) -> Option<String> {
+pub fn parent_prefix(prefix: &str) -> Option<String> {
     if prefix.is_empty() {
         return None;
     }
@@ -126,7 +126,7 @@ fn parent_prefix(prefix: &str) -> Option<String> {
     }
 }
 
-fn s3_config_path() -> Option<PathBuf> {
+pub fn s3_config_path() -> Option<PathBuf> {
     for var in ["COPERNICUS_VIEWER_S3_CONFIG", "S3_CONFIG"] {
         if let Ok(path) = std::env::var(var) {
             if !path.is_empty() {

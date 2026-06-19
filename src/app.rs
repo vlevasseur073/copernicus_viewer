@@ -17,11 +17,28 @@ struct SelectedNode {
     path: String,
 }
 
-#[derive(Default)]
 struct OpenProductDialog {
     show: bool,
     path: String,
-    browser_dir: PathBuf,
+    browser_location: crate::file_browser::BrowserLocation,
+    browse_request_id: u64,
+    browse_items: Option<Result<Vec<crate::file_browser::BrowserItem>, String>>,
+    browse_loading: bool,
+}
+
+impl OpenProductDialog {
+    fn new() -> Self {
+        Self {
+            show: false,
+            path: String::new(),
+            browser_location: crate::file_browser::BrowserLocation::Local(
+                crate::file_browser::home_dir().unwrap_or_else(|| PathBuf::from("/")),
+            ),
+            browse_request_id: 0,
+            browse_items: None,
+            browse_loading: false,
+        }
+    }
 }
 
 struct PendingNativeOpen {
@@ -32,6 +49,11 @@ enum LoadMessage {
     StoreReady {
         location: String,
         result: Result<ZarrStore, String>,
+    },
+    BrowseListReady {
+        request_id: u64,
+        location: crate::file_browser::BrowserLocation,
+        result: Result<Vec<crate::file_browser::BrowserItem>, String>,
     },
     PlotProgress {
         store_index: usize,
@@ -74,7 +96,7 @@ impl CopernicusViewer {
             load_rx,
             pending_plot: None,
             pending_native_open: None,
-            open_product_dialog: OpenProductDialog::default(),
+            open_product_dialog: OpenProductDialog::new(),
             comparison: ComparisonTool::default(),
             demo_capture: crate::demo_capture::DemoCapture::from_env(),
         };
@@ -91,16 +113,41 @@ impl CopernicusViewer {
         let store_root = last_root
             .filter(|root| !root.starts_with("s3://"))
             .map(PathBuf::from);
-        self.open_product_dialog.browser_dir = crate::file_browser::initial_browser_dir(
-            &self.open_product_dialog.path,
-            store_root.as_deref(),
-        );
+        self.open_product_dialog.browser_location =
+            crate::file_browser::initial_browser_location(
+                &self.open_product_dialog.path,
+                store_root.as_deref(),
+            );
         if self.open_product_dialog.path.is_empty() {
             if let Some(root) = last_root {
                 self.open_product_dialog.path = root.to_string();
             }
         }
+        self.open_product_dialog.browse_items = None;
         self.open_product_dialog.show = true;
+        self.request_browse_list();
+    }
+
+    fn request_browse_list(&mut self) {
+        self.open_product_dialog.browse_request_id += 1;
+        let request_id = self.open_product_dialog.browse_request_id;
+        let location = self.open_product_dialog.browser_location.clone();
+        self.open_product_dialog.browse_loading = true;
+
+        let tx = self.load_tx.clone();
+        thread::spawn(move || {
+            let result = crate::s3_browser::list_browser_items(&location);
+            let _ = tx.send(LoadMessage::BrowseListReady {
+                request_id,
+                location,
+                result,
+            });
+        });
+    }
+
+    fn set_browser_location(&mut self, location: crate::file_browser::BrowserLocation) {
+        self.open_product_dialog.browser_location = location;
+        self.request_browse_list();
     }
 
     fn request_native_open(&mut self, path_hint: String) {
@@ -147,6 +194,8 @@ impl CopernicusViewer {
         let mut submit_path: Option<String> = None;
         let mut keep_open = true;
         let mut selected_path = self.open_product_dialog.path.clone();
+        let mut navigate_to: Option<crate::file_browser::BrowserLocation> = None;
+        let is_s3 = self.open_product_dialog.browser_location.is_s3();
 
         let window = egui::Window::new("Open Zarr product")
             .collapsible(false)
@@ -167,25 +216,43 @@ impl CopernicusViewer {
 
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
-                    let can_go_up = self
-                        .open_product_dialog
-                        .browser_dir
-                        .parent()
-                        .is_some_and(|p| p.is_dir());
+                    let can_go_up = self.open_product_dialog.browser_location.can_go_up();
                     ui.add_enabled_ui(can_go_up, |ui| {
                         if ui.button("⬆ Up").clicked() {
-                            if let Some(parent) = self.open_product_dialog.browser_dir.parent() {
-                                self.open_product_dialog.browser_dir = parent.to_path_buf();
+                            if let Some(parent) = self.open_product_dialog.browser_location.go_up()
+                            {
+                                navigate_to = Some(parent);
                             }
                         }
                     });
 
                     if ui.button("🏠 Home").clicked() {
-                        self.open_product_dialog.browser_dir =
-                            crate::file_browser::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+                        navigate_to = Some(if is_s3 {
+                            crate::file_browser::BrowserLocation::S3Root
+                        } else {
+                            crate::file_browser::BrowserLocation::Local(
+                                crate::file_browser::home_dir()
+                                    .unwrap_or_else(|| PathBuf::from("/")),
+                            )
+                        });
                     }
 
-                    if ui.button("System picker…").clicked() {
+                    if ui.button("Local").clicked() {
+                        navigate_to = Some(crate::file_browser::BrowserLocation::Local(
+                            crate::file_browser::initial_browser_dir(
+                                &self.open_product_dialog.path,
+                                None,
+                            ),
+                        ));
+                    }
+
+                    if ui.button("S3").clicked() {
+                        navigate_to = Some(crate::file_browser::BrowserLocation::S3Root);
+                    }
+
+                    if !is_s3
+                        && ui.button("System picker…").clicked()
+                    {
                         self.request_native_open(self.open_product_dialog.path.clone());
                     }
                 });
@@ -193,87 +260,104 @@ impl CopernicusViewer {
                 ui.label(
                     egui::RichText::new(format!(
                         "Browse: {}",
-                        self.open_product_dialog.browser_dir.display()
+                        self.open_product_dialog.browser_location.display_label()
                     ))
                     .strong(),
                 );
                 ui.label(
-                    egui::RichText::new(
+                    egui::RichText::new(if is_s3 {
+                        "Select a .zarr prefix. Double-click a folder to open it, \
+                         or double-click a product to load it."
+                    } else {
                         "Select a .zarr folder or .zip archive. Double-click a folder to open it, \
-                         or double-click a product to load it.",
-                    )
+                         or double-click a product to load it."
+                    })
                     .small()
                     .weak(),
                 );
 
-                match crate::file_browser::list_directory(&self.open_product_dialog.browser_dir) {
-                    Ok(items) if items.is_empty() => {
-                        ui.add_space(8.0);
-                        ui.label(
-                            egui::RichText::new("No .zarr folders or zip archives here.").weak(),
-                        );
-                    }
-                    Ok(items) => {
-                        egui::ScrollArea::vertical()
-                            .auto_shrink([false, false])
-                            .max_height(240.0)
-                            .show(ui, |ui| {
-                                for item in items {
-                                    match item {
-                                        crate::file_browser::BrowserItem::Directory {
-                                            name,
-                                            path,
-                                            zarr_product,
-                                        } => {
-                                            let label = if zarr_product {
-                                                format!("📦  {name}")
-                                            } else {
-                                                format!("📁  {name}")
-                                            };
-                                            let selected =
-                                                selected_path == path.display().to_string();
-                                            let response = ui.selectable_label(selected, label);
-                                            if response.clicked() {
-                                                selected_path = path.display().to_string();
-                                                self.open_product_dialog.path =
-                                                    selected_path.clone();
-                                            }
-                                            if response.double_clicked() {
-                                                if zarr_product {
-                                                    submit_path =
-                                                        Some(path.display().to_string());
-                                                    keep_open = false;
+                if self.open_product_dialog.browse_loading {
+                    ui.add_space(8.0);
+                    ui.label(egui::RichText::new("Loading…").weak());
+                } else if let Some(result) = &self.open_product_dialog.browse_items {
+                    match result {
+                        Ok(items) if items.is_empty() => {
+                            ui.add_space(8.0);
+                            let message = if matches!(
+                                self.open_product_dialog.browser_location,
+                                crate::file_browser::BrowserLocation::S3Root
+                            ) {
+                                "No buckets in s3.conf — add [bucket-name] sections \
+                                 or type s3://bucket/path above."
+                            } else if is_s3 {
+                                "No child prefixes here."
+                            } else {
+                                "No .zarr folders or zip archives here."
+                            };
+                            ui.label(egui::RichText::new(message).weak());
+                        }
+                        Ok(items) => {
+                            egui::ScrollArea::vertical()
+                                .auto_shrink([false, false])
+                                .max_height(240.0)
+                                .show(ui, |ui| {
+                                    for item in items {
+                                        let location = item.location();
+                                        match &item {
+                                            crate::file_browser::BrowserItem::Directory {
+                                                name,
+                                                zarr_product,
+                                                ..
+                                            } => {
+                                                let label = if *zarr_product {
+                                                    format!("📦  {name}")
                                                 } else {
-                                                    self.open_product_dialog.browser_dir = path;
-                                                    selected_path.clear();
-                                                    self.open_product_dialog.path.clear();
+                                                    format!("📁  {name}")
+                                                };
+                                                let selected = selected_path == location;
+                                                let response = ui.selectable_label(selected, label);
+                                                if response.clicked() {
+                                                    selected_path = location.to_string();
+                                                    self.open_product_dialog.path =
+                                                        selected_path.clone();
+                                                }
+                                                if response.double_clicked() {
+                                                    if *zarr_product {
+                                                        submit_path = Some(location.to_string());
+                                                        keep_open = false;
+                                                    } else if let Some(next) =
+                                                        crate::file_browser::BrowserLocation::from_path_hint(location)
+                                                    {
+                                                        navigate_to = Some(next);
+                                                        selected_path.clear();
+                                                        self.open_product_dialog.path.clear();
+                                                    }
+                                                }
+                                            }
+                                            crate::file_browser::BrowserItem::ZipArchive {
+                                                name,
+                                                ..
+                                            } => {
+                                                let label = format!("🗜  {name}");
+                                                let selected = selected_path == location;
+                                                let response = ui.selectable_label(selected, label);
+                                                if response.clicked() {
+                                                    selected_path = location.to_string();
+                                                    self.open_product_dialog.path =
+                                                        selected_path.clone();
+                                                }
+                                                if response.double_clicked() {
+                                                    submit_path = Some(location.to_string());
+                                                    keep_open = false;
                                                 }
                                             }
                                         }
-                                        crate::file_browser::BrowserItem::ZipArchive {
-                                            name,
-                                            path,
-                                        } => {
-                                            let label = format!("🗜  {name}");
-                                            let selected =
-                                                selected_path == path.display().to_string();
-                                            let response = ui.selectable_label(selected, label);
-                                            if response.clicked() {
-                                                selected_path = path.display().to_string();
-                                                self.open_product_dialog.path =
-                                                    selected_path.clone();
-                                            }
-                                            if response.double_clicked() {
-                                                submit_path = Some(path.display().to_string());
-                                                keep_open = false;
-                                            }
-                                        }
                                     }
-                                }
-                            });
-                    }
-                    Err(err) => {
-                        ui.colored_label(egui::Color32::LIGHT_RED, err);
+                                });
+                        }
+                        Err(err) => {
+                            ui.colored_label(egui::Color32::LIGHT_RED, err);
+                        }
                     }
                 }
 
@@ -292,6 +376,10 @@ impl CopernicusViewer {
                     }
                 });
             });
+
+        if let Some(location) = navigate_to {
+            self.set_browser_location(location);
+        }
 
         if window.is_none() || !keep_open {
             self.open_product_dialog.show = false;
@@ -482,6 +570,20 @@ impl CopernicusViewer {
         while let Ok(msg) = self.load_rx.try_recv() {
             needs_repaint = true;
             match msg {
+                LoadMessage::BrowseListReady {
+                    request_id,
+                    location,
+                    result,
+                } => {
+                    if request_id != self.open_product_dialog.browse_request_id {
+                        continue;
+                    }
+                    if location != self.open_product_dialog.browser_location {
+                        continue;
+                    }
+                    self.open_product_dialog.browse_loading = false;
+                    self.open_product_dialog.browse_items = Some(result);
+                }
                 LoadMessage::StoreReady { location, result } => match result {
                     Ok(store) => {
                         if self

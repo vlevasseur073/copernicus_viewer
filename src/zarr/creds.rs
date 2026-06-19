@@ -108,6 +108,45 @@ impl S3Config {
         ))
     }
 
+    /// List bucket names from configured INI sections in the S3 config file(s).
+    pub fn list_configured_buckets(config_path: Option<&Path>) -> Result<Vec<String>, IoError> {
+        let mut buckets = Vec::new();
+
+        if let Some(path) = config_path {
+            buckets.extend(Self::bucket_names_from_ini_file(path)?);
+        }
+
+        if let Ok(home) = env::var("HOME") {
+            let default_path = Path::new(&home)
+                .join(".config")
+                .join("cp-rs")
+                .join("s3.conf");
+            if default_path.exists() {
+                let from_default = Self::bucket_names_from_ini_file(&default_path)?;
+                for name in from_default {
+                    if !buckets.iter().any(|b| b == &name) {
+                        buckets.push(name);
+                    }
+                }
+            }
+        }
+
+        buckets.sort();
+        Ok(buckets)
+    }
+
+    fn bucket_names_from_ini_file(path: &Path) -> Result<Vec<String>, IoError> {
+        let content = std::fs::read_to_string(path).map_err(|e| {
+            IoError::S3Credentials(format!("cannot read S3 config {}: {e}", path.display()))
+        })?;
+        let mut names: Vec<String> = parse_ini_sections(&content)
+            .into_iter()
+            .map(|section| section.name)
+            .collect();
+        names.sort();
+        Ok(names)
+    }
+
     /// Parse an rclone-style INI file, selecting the section whose name
     /// matches `bucket`.  Returns `Ok(None)` when the file is valid but
     /// contains no section matching the bucket name, so the caller can
@@ -259,6 +298,32 @@ fn parse_ini_sections(content: &str) -> Vec<IniSection> {
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[test]
+    fn list_configured_buckets_reads_all_sections() {
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        writeln!(
+            tmp,
+            "[bucket-a]\n\
+             type = s3\n\
+             access_key_id = AK_A\n\
+             secret_access_key = SK_A\n\
+             region = eu-west-1\n\
+             endpoint = https://s3.a.example.com\n\
+             \n\
+             [bucket-b]\n\
+             type = s3\n\
+             access_key_id = AK_B\n\
+             secret_access_key = SK_B\n\
+             region = us-east-1\n\
+             endpoint = https://s3.b.example.com"
+        )
+        .unwrap();
+
+        let buckets = S3Config::list_configured_buckets(Some(tmp.path())).unwrap();
+        assert!(buckets.contains(&"bucket-a".to_string()));
+        assert!(buckets.contains(&"bucket-b".to_string()));
+    }
 
     #[test]
     fn parse_ini_selects_matching_section() {

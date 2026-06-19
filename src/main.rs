@@ -2,6 +2,7 @@ mod app;
 mod demo_capture;
 mod file_browser;
 mod platform;
+mod s3_browser;
 
 fn main() -> eframe::Result<()> {
     platform::init();
