@@ -1,33 +1,46 @@
 use ndarray::ArrayD;
 use serde_json::{Map, Value};
 
+/// Which CF flag view to plot for a flag variable.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum FlagSelection {
+    /// Plot raw flag integer values.
     #[default]
     Raw,
+    /// Plot a single flag meaning or bitmask as a binary layer.
     Flag(usize),
 }
 
+/// How CF flag codes are encoded in the array.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CfFlagMode {
+    /// Discrete values listed in `flag_values`.
     Values,
+    /// Bitmasks listed in `flag_masks`.
     Masks,
 }
 
+/// Parsed CF flag metadata from array attributes.
 #[derive(Clone, Debug)]
 pub struct CfFlags {
+    /// Human-readable meanings from `flag_meanings`.
     pub meanings: Vec<String>,
+    /// Flag values or bitmasks parallel to `meanings`.
     pub codes: Vec<u64>,
+    /// Whether flags use discrete values or bitmasks.
     pub mode: CfFlagMode,
+    /// Optional fill value treated as missing in flag plots.
     pub fill_value: Option<f64>,
 }
 
 impl CfFlags {
+    /// Display label for a flag index in the plot UI.
     pub fn flag_label(&self, index: usize) -> String {
         let meaning = self.meanings.get(index).map(String::as_str).unwrap_or("?");
         format!("[{index}] {meaning} ({})", self.code_description(index))
     }
 
+    /// Short description of the flag code or mask at `index`.
     pub fn code_description(&self, index: usize) -> String {
         let code = self.codes.get(index).copied().unwrap_or(0);
         match self.mode {
@@ -42,6 +55,7 @@ impl CfFlags {
         }
     }
 
+    /// Returns `true` when flags use bitmask encoding.
     pub fn uses_bitmasks(&self) -> bool {
         self.mode == CfFlagMode::Masks
     }
@@ -63,6 +77,7 @@ pub fn parse_cf_flags(attributes: &Map<String, Value>) -> Option<CfFlags> {
     })
 }
 
+/// Extract a single flag layer from `values` as 0/1 (NaN for missing).
 pub fn apply_flag_selection(values: &ArrayD<f64>, flags: &CfFlags, index: usize) -> ArrayD<f64> {
     let Some(&code) = flags.codes.get(index) else {
         return values.clone();

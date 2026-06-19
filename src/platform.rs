@@ -106,6 +106,7 @@ pub fn init() {
     }
 }
 
+/// Log the detected GPU / OpenGL profile at startup.
 pub fn log_startup() {
     let profile = GpuProfile::detect();
     match profile {
@@ -157,6 +158,7 @@ pub fn configure_egui(cc: &eframe::CreationContext<'_>) {
     });
 }
 
+/// Returns `true` when running under WSL (Linux `/proc/version` contains "microsoft").
 pub fn is_wsl() -> bool {
     std::fs::read_to_string("/proc/version")
         .map(|v| v.to_lowercase().contains("microsoft"))
@@ -265,7 +267,9 @@ fn force_env(key: &str, value: &str) {
 /// Which native picker to use for an EOPF Zarr product.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ZarrNativePick {
+/// Native folder picker for `.zarr` directories.
     Directory,
+    /// Native file picker for `.zarr.zip` archives.
     ZipArchive,
 }
 

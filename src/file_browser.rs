@@ -1,28 +1,43 @@
+//! In-app filesystem and S3 browser for the **File → Open Zarr…** dialog.
+
 use std::path::{Path, PathBuf};
 
 use copernicus_viewer::zarr::{format_s3_uri, parent_prefix, parse_product_location, ProductLocation};
 
+/// Current browse location in the open-product dialog.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BrowserLocation {
+    /// Local directory path.
     Local(PathBuf),
+    /// Top-level list of buckets from the S3 config file.
     S3Root,
+    /// A prefix within a configured S3 bucket.
     S3 { bucket: String, prefix: String },
 }
 
+/// Entry shown in the in-app file / S3 browser.
 #[derive(Clone, Debug)]
 pub enum BrowserItem {
+    /// Subdirectory or S3 prefix; `zarr_product` marks openable `.zarr` products.
     Directory {
+        /// Display name (final path segment).
         name: String,
+        /// Full path or `s3://` URI to open or navigate into.
         location: String,
+        /// Whether double-click opens this entry as a Zarr product.
         zarr_product: bool,
     },
+    /// Local `.zarr.zip` archive.
     ZipArchive {
+        /// File name.
         name: String,
+        /// Absolute filesystem path.
         location: String,
     },
 }
 
 impl BrowserItem {
+    /// Path or URI associated with this browser entry.
     pub fn location(&self) -> &str {
         match self {
             BrowserItem::Directory { location, .. } | BrowserItem::ZipArchive { location, .. } => {
@@ -33,10 +48,12 @@ impl BrowserItem {
 }
 
 impl BrowserLocation {
+    /// Returns `true` for S3 bucket or prefix locations.
     pub fn is_s3(&self) -> bool {
         matches!(self, Self::S3Root | Self::S3 { .. })
     }
 
+    /// Human-readable label for the location bar.
     pub fn display_label(&self) -> String {
         match self {
             Self::Local(path) => path.display().to_string(),
@@ -45,6 +62,7 @@ impl BrowserLocation {
         }
     }
 
+    /// Parse a typed path hint into a browse location, if possible.
     pub fn from_path_hint(hint: &str) -> Option<Self> {
         let trimmed = hint.trim();
         if trimmed.is_empty() {
@@ -60,6 +78,7 @@ impl BrowserLocation {
         Some(Self::Local(PathBuf::from(trimmed)))
     }
 
+    /// Navigate to the parent directory or S3 prefix.
     pub fn go_up(&self) -> Option<Self> {
         match self {
             Self::Local(path) => path.parent().map(|p| Self::Local(p.to_path_buf())),
@@ -77,6 +96,7 @@ impl BrowserLocation {
         }
     }
 
+    /// Returns `true` when the **Up** button should be enabled.
     pub fn can_go_up(&self) -> bool {
         match self {
             Self::Local(path) => path.parent().is_some_and(|p| p.is_dir()),
@@ -86,6 +106,7 @@ impl BrowserLocation {
     }
 }
 
+/// Initial browse location from a typed path hint and optional last-opened product root.
 pub fn initial_browser_location(path_hint: &str, store_root: Option<&Path>) -> BrowserLocation {
     let trimmed = path_hint.trim();
     if trimmed.starts_with("s3://") {
@@ -124,6 +145,7 @@ fn initial_s3_browser_location(uri: &str) -> Option<BrowserLocation> {
     })
 }
 
+/// Initial local directory for browsing (parent of a `.zarr` product when applicable).
 pub fn initial_browser_dir(path_hint: &str, store_root: Option<&Path>) -> PathBuf {
     if let Some(root) = store_root {
         if root.is_dir() {
@@ -172,10 +194,12 @@ pub fn initial_browser_dir(path_hint: &str, store_root: Option<&Path>) -> PathBu
     home_dir().unwrap_or_else(|| PathBuf::from("/"))
 }
 
+/// User home directory from `$HOME`, when set.
 pub fn home_dir() -> Option<PathBuf> {
     std::env::var_os("HOME").map(PathBuf::from)
 }
 
+/// List `.zarr` directories and `.zarr.zip` files in a local directory.
 pub fn list_directory(dir: &Path) -> Result<Vec<BrowserItem>, String> {
     if !dir.is_dir() {
         return Err(format!("Not a directory: {}", dir.display()));
@@ -237,10 +261,12 @@ pub fn list_directory(dir: &Path) -> Result<Vec<BrowserItem>, String> {
     Ok(items)
 }
 
+/// Returns `true` when `path` looks like a Zarr product directory.
 pub fn is_zarr_product_dir(name: &str, path: &Path) -> bool {
     name.ends_with(".zarr") || path.join(".zgroup").exists() || path.join(".zmetadata").exists()
 }
 
+/// Returns `true` when `name` is a Zarr zip archive file.
 pub fn is_zarr_zip(name: &str) -> bool {
     name.ends_with(".zarr.zip") || name.ends_with(".zip")
 }

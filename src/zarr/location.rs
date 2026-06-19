@@ -36,15 +36,21 @@ fn is_local_zarr_root(path: &Path) -> bool {
     path.is_dir() && (path.join(".zgroup").exists() || path.join(".zmetadata").exists())
 }
 
+/// Where an EOPF product lives: local filesystem or S3 object prefix.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProductLocation {
+    /// Path to a `.zarr` directory or `.zarr.zip` file.
     Local(PathBuf),
+    /// S3 bucket and object key prefix (without the `s3://` scheme).
     S3 { bucket: String, prefix: String },
 }
 
+/// A product location normalized to its Zarr root with a stable display identifier.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedProduct {
+    /// Canonical path or `s3://` URI for the product root.
     pub canonical_id: String,
+    /// Resolved storage location.
     pub location: ProductLocation,
 }
 
@@ -107,6 +113,7 @@ fn normalize_prefix(prefix: &str) -> String {
     prefix.trim_matches('/').to_string()
 }
 
+/// Format an `s3://` URI from bucket and prefix components.
 pub fn format_s3_uri(bucket: &str, prefix: &str) -> String {
     if prefix.is_empty() {
         format!("s3://{bucket}")
@@ -115,6 +122,7 @@ pub fn format_s3_uri(bucket: &str, prefix: &str) -> String {
     }
 }
 
+/// Parent prefix within a bucket (`"a/b/c"` → `"a/b"`; top-level → `""`; empty → `None`).
 pub fn parent_prefix(prefix: &str) -> Option<String> {
     if prefix.is_empty() {
         return None;
@@ -126,6 +134,7 @@ pub fn parent_prefix(prefix: &str) -> Option<String> {
     }
 }
 
+/// Path to an explicit S3 config file from `COPERNICUS_VIEWER_S3_CONFIG` or `S3_CONFIG`.
 pub fn s3_config_path() -> Option<PathBuf> {
     for var in ["COPERNICUS_VIEWER_S3_CONFIG", "S3_CONFIG"] {
         if let Ok(path) = std::env::var(var) {

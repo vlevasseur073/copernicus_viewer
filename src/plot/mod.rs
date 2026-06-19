@@ -1,3 +1,5 @@
+//! Array plotting: async loading, geo-referenced heatmaps, and CF flag visualization.
+
 pub mod flags;
 pub mod georef;
 pub mod loader;

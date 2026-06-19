@@ -4,43 +4,63 @@ use zarrs::hierarchy::NodeMetadata;
 use zarrs::metadata::ArrayMetadata;
 use zarrs::node::NodePath;
 
+/// In-memory hierarchy of an EOPF Zarr product.
 #[derive(Clone, Debug)]
 pub struct ZarrTree {
+    /// Root group node (`path == "/"`).
     pub root: ZarrTreeNode,
 }
 
+/// A group or array node in the product hierarchy.
 #[derive(Clone, Debug)]
 pub struct ZarrTreeNode {
+    /// Final path segment (e.g. `"lst"`).
     pub name: String,
+    /// Absolute hierarchy path (e.g. `"/measurements/lst"`).
     pub path: String,
+    /// Group or array metadata for this node.
     pub kind: ZarrNodeKind,
+    /// Child groups and arrays, sorted with groups before arrays.
     pub children: Vec<ZarrTreeNode>,
 }
 
+/// Metadata carried for a hierarchy node.
 #[derive(Clone, Debug)]
 pub enum ZarrNodeKind {
+    /// Zarr group (`.zgroup`) with optional attributes.
     Group {
+        /// Contents of `.zattrs` for this group.
         attributes: Map<String, Value>,
     },
+    /// Zarr array (`.zarray`) with shape, chunking, and CF-style attributes.
     Array {
+        /// Logical array shape.
         shape: Vec<u64>,
+        /// Chunk shape along each dimension.
         chunks: Vec<u64>,
+        /// Zarr data type name (e.g. `"float32"`).
         dtype: String,
+        /// Named dimensions when present in Zarr v3 metadata.
         dimension_names: Vec<String>,
+        /// Contents of `.zattrs` for this array.
         attributes: Map<String, Value>,
+        /// Declared fill / missing value, if any.
         fill_value: Option<Value>,
     },
 }
 
 impl ZarrTreeNode {
+    /// Returns `true` when this node is a Zarr array leaf.
     pub fn is_array(&self) -> bool {
         matches!(self.kind, ZarrNodeKind::Array { .. })
     }
 
+    /// Returns `true` when this node is a Zarr group.
     pub fn is_group(&self) -> bool {
         matches!(self.kind, ZarrNodeKind::Group { .. })
     }
 
+    /// Look up a node by hierarchy path (with or without a leading `/`).
     pub fn find_by_path(&self, path: &str) -> Option<&ZarrTreeNode> {
         let normalized = normalize_path(path);
         if self.path == normalized {
@@ -55,6 +75,7 @@ impl ZarrTreeNode {
     }
 }
 
+/// Build a [`ZarrTree`] from zarrs hierarchy traversal output.
 pub fn build_tree(nodes: &[(NodePath, NodeMetadata)]) -> ZarrTree {
     let mut root = ZarrTreeNode {
         name: "/".to_string(),
@@ -87,6 +108,7 @@ pub fn build_tree(nodes: &[(NodePath, NodeMetadata)]) -> ZarrTree {
     ZarrTree { root }
 }
 
+/// Attach root-group attributes from opened zarr metadata to the tree root.
 pub fn apply_root_metadata(tree: &mut ZarrTree, meta: &GroupMetadata) {
     tree.root.kind = group_kind(meta);
 }
@@ -257,6 +279,7 @@ impl ZarrTreeNode {
         self.collect_paths() == other.collect_paths()
     }
 
+    /// Returns `true` when the array shape contains a zero dimension.
     pub fn is_empty_array(&self) -> bool {
         matches!(
             &self.kind,

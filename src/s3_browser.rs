@@ -1,3 +1,5 @@
+//! S3 prefix listing for the in-app open-product browser.
+
 use crate::file_browser::BrowserItem;
 use copernicus_viewer::zarr::creds::S3Config;
 use copernicus_viewer::zarr::location::{format_s3_uri, s3_config_path};
@@ -7,6 +9,7 @@ use copernicus_viewer::zarr::error::IoError;
 use zarrs_object_store::object_store::path::Path as ObjectPath;
 use zarrs_object_store::object_store::ObjectStore;
 
+/// List browser entries for a local directory, S3 bucket root, or S3 prefix.
 pub fn list_browser_items(
     location: &crate::file_browser::BrowserLocation,
 ) -> Result<Vec<BrowserItem>, String> {

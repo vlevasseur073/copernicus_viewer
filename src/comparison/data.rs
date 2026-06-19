@@ -7,54 +7,83 @@ use crate::zarr::{ZarrNodeKind, ZarrStore};
 use super::array_io::for_each_aligned_chunk;
 use super::options::CompareOptions;
 
+/// Per-variable numeric comparison statistics and pass/fail outcome.
 #[derive(Clone, Debug)]
 pub struct VariableComparison {
+    /// Hierarchy path of the compared array.
     pub path: String,
+    /// Whether outlier and coverage thresholds were met.
     pub passed: bool,
+    /// Minimum error value across valid pixels.
     pub min: f64,
+    /// Maximum error value across valid pixels.
     pub max: f64,
+    /// Mean error.
     pub mean: f64,
+    /// Standard deviation of errors.
     pub std: f64,
+    /// Median error.
     pub median: f64,
+    /// Mean squared error between reference and new values.
     pub mse: f64,
+    /// Peak signal-to-noise ratio derived from new-value dynamic range.
     pub psnr: f64,
+    /// Count of pixels exceeding the error threshold.
     pub outlier_count: u64,
+    /// Count of pixels with finite errors (both reference and new valid).
     pub valid_pixels: u64,
+    /// Total pixels visited (including non-finite).
     pub total_pixels: u64,
+    /// Difference in valid-pixel counts (new − reference).
     pub coverage_diff: i64,
+    /// Ratio of outlier pixels to valid pixels.
     pub outlier_ratio: f64,
+    /// Ratio of coverage difference to total pixels.
     pub coverage_diff_ratio: f64,
+    /// Whether relative error mode was used for this variable.
     pub relative_mode: bool,
+    /// Error threshold applied for outlier detection.
     pub threshold: f64,
+    /// Number of reference-aligned chunks compared.
     pub chunks_compared: usize,
 }
 
+/// A measurement variable that could not be compared.
 #[derive(Clone, Debug)]
 pub struct SkippedVariable {
+    /// Hierarchy path of the variable.
     pub path: String,
+    /// Reason the comparison was skipped.
     pub reason: String,
 }
 
+/// Aggregated variable data comparison report.
 #[derive(Clone, Debug, Default)]
 pub struct DataReport {
+    /// Successfully compared variables.
     pub variables: Vec<VariableComparison>,
+    /// Variables skipped due to shape, dtype, or I/O errors.
     pub skipped: Vec<SkippedVariable>,
 }
 
 impl DataReport {
+    /// Number of variables that passed thresholds.
     pub fn passed_count(&self) -> usize {
         self.variables.iter().filter(|v| v.passed).count()
     }
 
+    /// Number of variables that failed thresholds.
     pub fn failed_count(&self) -> usize {
         self.variables.iter().filter(|v| !v.passed).count()
     }
 
+    /// Number of skipped variables.
     pub fn skipped_count(&self) -> usize {
         self.skipped.len()
     }
 }
 
+/// Compare measurement variable data between two products on the reference chunk grid.
 pub fn compare_variable_data(
     left: &ZarrStore,
     right: &ZarrStore,
@@ -386,6 +415,7 @@ fn json_number(value: &Value) -> Option<f64> {
     }
 }
 
+/// Global relative score (100 − median of per-variable mean/median errors), if available.
 pub fn global_relative_score(report: &DataReport) -> Option<f64> {
     if report.variables.is_empty() {
         return None;

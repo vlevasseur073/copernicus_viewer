@@ -11,48 +11,80 @@ use crate::plot::flags::{apply_flag_selection, parse_cf_flags, CfFlags, FlagSele
 use crate::plot::georef::{resolve_georef, GeorefInfo};
 use crate::zarr::{ZarrNodeKind, ZarrTreeNode};
 
+/// Parameters for loading and plotting a Zarr array subset.
 #[derive(Clone, Debug)]
 pub struct PlotRequest {
+    /// Hierarchy path of the array to plot.
     pub array_path: String,
+    /// Fixed indices for dimensions above the trailing 2D slice.
     pub slice_indices: Vec<usize>,
+    /// Raw values or a selected CF flag layer.
     pub flag_selection: FlagSelection,
 }
 
+/// Result of loading array data for plotting and inspection.
 #[derive(Clone, Debug)]
 pub struct PlotLoadResult {
+    /// Renderable plot payload (line, heatmap, or message).
     pub plot: PlotData,
+    /// Numeric statistics over the loaded subset.
     pub stats: ArrayStatistics,
+    /// Tabular preview of the loaded subset.
     pub preview: ArrayPreview,
+    /// Coordinate metadata when geo-referencing is available.
     pub georef: Option<GeorefInfo>,
+    /// Parsed CF flags when the array defines them.
     pub flags: Option<CfFlags>,
 }
 
+/// Plot payload consumed by [`crate::plot::PlotPanel`].
 #[derive(Clone, Debug)]
 pub enum PlotData {
+    /// 1D line series.
     Line {
+        /// Y values.
         y: Vec<f64>,
+        /// Plot title / variable label.
         label: String,
+        /// Optional coordinate metadata.
         georef: Option<GeorefInfo>,
     },
+    /// 2D heatmap raster (downsampled when large).
     Heatmap {
+        /// Raster width in pixels.
         width: usize,
+        /// Raster height in pixels.
         height: usize,
+        /// Normalized pixel values for colouring.
         values: Vec<f32>,
+        /// Colour scale minimum.
         vmin: f32,
+        /// Colour scale maximum.
         vmax: f32,
+        /// Plot title / variable label.
         label: String,
+        /// Optional coordinate metadata for axis labels.
         georef: Option<GeorefInfo>,
+        /// Source Y dimension range in the original array.
         y_range: std::ops::Range<u64>,
+        /// Source X dimension range in the original array.
         x_range: std::ops::Range<u64>,
+        /// `true` for binary flag plots (two-colour scale).
         binary: bool,
     },
+    /// Informational message when plotting is not possible.
     Message(String),
 }
 
+/// Callback invoked during async plot loading with `(fraction, message)`.
 pub type ProgressCallback = Arc<dyn Fn(f32, &str) + Send + Sync>;
 
 const MAX_PLOT_PIXELS: usize = 512 * 512;
 
+/// Load array data for plotting and inspector statistics.
+///
+/// Reads a 1D slice or 2D subset (with optional downsampling), applies CF flag
+/// selection, and resolves geo-referencing from coordinate variables.
 pub fn load_plot_data(
     storage: &ReadableListableStorage,
     tree: &ZarrTreeNode,

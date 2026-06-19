@@ -56,6 +56,7 @@ fn footprint_fill_color() -> Color32 {
     Color32::from_rgba_unmultiplied(255, 140, 0, 90)
 }
 
+/// Draw an adaptive Plate Carrée coverage map for `footprint` in the inspector.
 pub fn render_footprint_map(ui: &mut Ui, footprint: &ProductFootprint) {
     let view = compute_map_view(footprint);
 

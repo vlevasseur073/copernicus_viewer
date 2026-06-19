@@ -28,11 +28,15 @@ enum Step {
 }
 
 pub enum DemoAction {
+    /// Select the LST variable in the hierarchy for the explore screenshot.
     SelectLst,
+    /// Open the comparison tool for the comparison screenshot.
     RunComparison,
+    /// Close the application after screenshots are saved.
     Close,
 }
 
+/// Automated README screenshot capture driven by `COPERNICUS_VIEWER_CAPTURE_DEMO`.
 pub struct DemoCapture {
     out_dir: PathBuf,
     step: Step,

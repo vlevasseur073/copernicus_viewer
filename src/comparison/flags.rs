@@ -7,28 +7,41 @@ use crate::zarr::{ZarrNodeKind, ZarrStore};
 use super::array_io::for_each_aligned_chunk;
 use super::options::CompareOptions;
 
+/// Comparison outcome for a single CF flag meaning or bitmask.
 #[derive(Clone, Debug)]
 pub struct FlagBitComparison {
+    /// Human-readable flag meaning from `flag_meanings`.
     pub meaning: String,
+    /// Percentage of pixels where this flag bit matches between products.
     pub equal_percentage: f64,
+    /// Percentage of pixels where this flag bit differs.
     pub different_percentage: f64,
+    /// Whether the different percentage is within the outlier threshold.
     pub passed: bool,
 }
 
+/// Per-flag-variable comparison across all defined flag bits.
 #[derive(Clone, Debug)]
 pub struct FlagVariableComparison {
+    /// Hierarchy path of the flag array.
     pub path: String,
+    /// Per-bit comparison results.
     pub bits: Vec<FlagBitComparison>,
+    /// Mean equal percentage across all bits.
     pub score: f64,
+    /// Number of reference-aligned chunks compared.
     pub chunks_compared: usize,
 }
 
+/// Aggregated CF flag comparison report.
 #[derive(Clone, Debug, Default)]
 pub struct FlagReport {
+    /// Compared flag variables.
     pub variables: Vec<FlagVariableComparison>,
 }
 
 impl FlagReport {
+    /// Total number of flag bits that passed.
     pub fn passed_count(&self) -> usize {
         self.variables
             .iter()
@@ -37,6 +50,7 @@ impl FlagReport {
             .count()
     }
 
+    /// Total number of flag bits that failed.
     pub fn failed_count(&self) -> usize {
         self.variables
             .iter()
@@ -46,6 +60,7 @@ impl FlagReport {
     }
 }
 
+/// Compare CF flag variables between two products bit-by-bit.
 pub fn compare_flag_variables(
     left: &ZarrStore,
     right: &ZarrStore,
@@ -219,6 +234,7 @@ fn flag_variable_score(bits: &[FlagBitComparison]) -> f64 {
     bits.iter().map(|b| b.equal_percentage).sum::<f64>() / bits.len() as f64
 }
 
+/// Median equal-percentage score across all compared flag variables.
 pub fn global_flag_score(report: &FlagReport) -> Option<f64> {
     if report.variables.is_empty() {
         return None;

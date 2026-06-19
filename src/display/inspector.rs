@@ -5,21 +5,30 @@ use crate::display::stats::{ArrayPreview, ArrayStatistics};
 use crate::display::{format_node_repr, parse_root_attributes};
 use crate::zarr::{ZarrNodeKind, ZarrTreeNode};
 
+/// State shown in the metadata inspector panel for the selected hierarchy node.
 #[derive(Clone, Debug, Default)]
 pub struct InspectorView {
+    /// xarray-style title line (e.g. `<xarray.DataArray 'lst'>`).
     pub title: String,
+    /// Multi-line metadata body (dimensions, dtype, attributes).
     pub repr_body: String,
+    /// Product spatial footprint when root STAC metadata is available.
     pub footprint: Option<ProductFootprint>,
+    /// Nested product attributes tree for the root group.
     pub root_attributes: Option<Vec<AttributeNode>>,
+    /// Numeric statistics for a loaded array subset.
     pub stats: Option<ArrayStatistics>,
+    /// Tabular preview of array values.
     pub preview: Option<ArrayPreview>,
 }
 
 impl InspectorView {
+    /// Build inspector content from a selected node (without array statistics).
     pub fn from_node(node: &ZarrTreeNode, product_name: &str) -> Self {
         Self::from_node_with_root(node, product_name, None)
     }
 
+    /// Build inspector content, using `root` for product-level attributes when not at `/`.
     pub fn from_node_with_root(
         node: &ZarrTreeNode,
         product_name: &str,
@@ -38,11 +47,13 @@ impl InspectorView {
         }
     }
 
+    /// Attach statistics and preview tables after async array loading completes.
     pub fn set_array_extras(&mut self, stats: ArrayStatistics, preview: ArrayPreview) {
         self.stats = Some(stats);
         self.preview = Some(preview);
     }
 
+    /// Clear statistics and preview when selection changes or loading starts.
     pub fn clear_array_extras(&mut self) {
         self.stats = None;
         self.preview = None;
@@ -68,6 +79,7 @@ fn root_metadata(
     (root_attributes, footprint)
 }
 
+/// Render the inspector panel (footprint map, attributes, repr, stats, preview).
 pub fn render_inspector(ui: &mut egui::Ui, view: &InspectorView) {
     ui.monospace(&view.title);
     ui.separator();

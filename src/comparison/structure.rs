@@ -5,30 +5,43 @@ use crate::zarr::{ZarrNodeKind, ZarrStore, ZarrTreeNode};
 
 use super::options::CompareOptions;
 
+/// Severity of a structure/metadata difference.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StructureStatus {
+    /// Field values match.
     Passed,
     /// Non-fatal difference (e.g. chunk layout) — data is still compared on the reference grid.
     Warning,
+    /// Fatal metadata mismatch.
     Failed,
+    /// Node exists in the reference product but not in the new product.
     MissingInNew,
 }
 
+/// A single structure or metadata field comparison result.
 #[derive(Clone, Debug)]
 pub struct StructureIssue {
+    /// Hierarchy path of the affected node.
     pub path: String,
+    /// Compared field name (`shape`, `dtype`, `attrs`, …).
     pub field: String,
+    /// Outcome severity.
     pub status: StructureStatus,
+    /// Human-readable detail or `"identical"` when passed.
     pub detail: String,
 }
 
+/// Aggregated structure comparison report.
 #[derive(Clone, Debug, Default)]
 pub struct StructureReport {
+    /// Per-field issues for every visited node.
     pub issues: Vec<StructureIssue>,
+    /// Set when shape or kind mismatches prevent variable data comparison.
     pub skip_data_comparison: bool,
 }
 
 impl StructureReport {
+    /// Count of passed field checks.
     pub fn passed_count(&self) -> usize {
         self.issues
             .iter()
@@ -36,6 +49,7 @@ impl StructureReport {
             .count()
     }
 
+    /// Count of failed or missing-in-new issues.
     pub fn failed_count(&self) -> usize {
         self.issues
             .iter()
@@ -48,6 +62,7 @@ impl StructureReport {
             .count()
     }
 
+    /// Count of non-fatal warnings.
     pub fn warning_count(&self) -> usize {
         self.issues
             .iter()
@@ -232,6 +247,7 @@ fn attrs_equal(a: &Map<String, Value>, b: &Map<String, Value>) -> bool {
     a == b
 }
 
+/// Returns `true` when the node is a coordinate or geometry auxiliary variable.
 pub fn is_coordinate_variable(node: &ZarrTreeNode) -> bool {
     let ZarrNodeKind::Array { attributes, .. } = &node.kind else {
         return false;
@@ -269,6 +285,7 @@ pub fn is_coordinate_variable(node: &ZarrTreeNode) -> bool {
     false
 }
 
+/// Returns `true` when the node is a measurement variable eligible for data comparison.
 pub fn is_data_variable(node: &ZarrTreeNode) -> bool {
     let ZarrNodeKind::Array {
         attributes, dtype, ..
@@ -307,6 +324,7 @@ fn attribute_str(attributes: &Map<String, Value>, key: &str) -> Option<String> {
         .map(str::to_string)
 }
 
+/// Returns `true` when the node is a CF flag or mask variable.
 pub fn is_flag_variable(node: &ZarrTreeNode) -> bool {
     let ZarrNodeKind::Array { attributes, .. } = &node.kind else {
         return false;
@@ -317,6 +335,7 @@ pub fn is_flag_variable(node: &ZarrTreeNode) -> bool {
     parse_cf_flags(attributes).is_some()
 }
 
+/// Collect sorted hierarchy paths of measurement variables under `root`.
 pub fn collect_data_variables(root: &ZarrTreeNode) -> Vec<String> {
     let mut paths = Vec::new();
     root.visit_nodes(&mut |node| {
@@ -328,6 +347,7 @@ pub fn collect_data_variables(root: &ZarrTreeNode) -> Vec<String> {
     paths
 }
 
+/// Collect sorted hierarchy paths of CF flag variables under `root`.
 pub fn collect_flag_variables(root: &ZarrTreeNode) -> Vec<String> {
     let mut paths = Vec::new();
     root.visit_nodes(&mut |node| {

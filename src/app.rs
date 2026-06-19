@@ -1,3 +1,5 @@
+//! Main egui application: hierarchy browser, inspector, plot panel, and comparison tool.
+
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
@@ -68,6 +70,7 @@ enum LoadMessage {
     },
 }
 
+/// Root egui application state for the Copernicus Viewer window.
 pub struct CopernicusViewer {
     stores: Vec<Arc<ZarrStore>>,
     selected: Option<SelectedNode>,
@@ -84,6 +87,7 @@ pub struct CopernicusViewer {
 }
 
 impl CopernicusViewer {
+    /// Create the viewer and asynchronously open any `initial_locations` (paths or `s3://` URIs).
     pub fn new(initial_locations: Vec<String>) -> Self {
         let (load_tx, load_rx) = mpsc::channel();
         let mut app = Self {

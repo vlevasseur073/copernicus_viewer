@@ -1,3 +1,5 @@
+//! Chunk-aligned array I/O for comparing two Zarr products on the reference grid.
+
 use std::ops::Range;
 
 use anyhow::{Context, Result};
@@ -17,6 +19,7 @@ pub fn iter_reference_chunk_subsets(shape: &[u64], ref_chunks: &[u64]) -> Vec<Ve
     cartesian_ranges(&per_dim)
 }
 
+/// Effective chunk shape, falling back to full dimension sizes when metadata is missing.
 pub fn effective_chunks(shape: &[u64], chunks: &[u64]) -> Vec<u64> {
     if chunks.len() == shape.len() && chunks.iter().all(|&c| c > 0) {
         return chunks.to_vec();

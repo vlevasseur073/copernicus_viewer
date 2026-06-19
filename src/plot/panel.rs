@@ -6,6 +6,7 @@ use super::flags::{parse_cf_flags, CfFlags, FlagSelection};
 use super::georef::{axis_label, extent_description, GeorefInfo};
 use super::{PlotData, PlotLoadResult, PlotRequest};
 
+/// Plot panel state: slice controls, async loading, heatmap texture, and flag selector.
 pub struct PlotPanel {
     array_path: Option<String>,
     slice_indices: Vec<usize>,
@@ -37,14 +38,17 @@ impl Default for PlotPanel {
 }
 
 impl PlotPanel {
+    /// Current fixed indices for dimensions above the plotted 2D slice.
     pub fn slice_indices(&self) -> &[usize] {
         &self.slice_indices
     }
 
+    /// Currently selected CF flag view (`Raw` or a flag index).
     pub fn flag_selection(&self) -> FlagSelection {
         self.flag_selection
     }
 
+    /// Select an array for plotting and queue an initial load request.
     pub fn select_array(
         &mut self,
         path: &str,
@@ -80,18 +84,22 @@ impl PlotPanel {
         self.pending_request = Some(self.build_request(path));
     }
 
+    /// Reset the panel to its default empty state.
     pub fn clear(&mut self) {
         *self = Self::default();
     }
 
+    /// Take the pending load request (called by the app background loader).
     pub fn take_pending_request(&mut self) -> Option<PlotRequest> {
         self.pending_request.take()
     }
 
+    /// Update the progress bar during async loading.
     pub fn set_load_progress(&mut self, fraction: f32, message: &str) {
         self.load_progress = Some((fraction.clamp(0.0, 1.0), message.to_string()));
     }
 
+    /// Apply a completed load result (plot data and optional flags).
     pub fn set_load_result(&mut self, result: PlotLoadResult) {
         if result.flags.is_some() {
             self.flags = result.flags;
@@ -99,6 +107,7 @@ impl PlotPanel {
         self.set_plot_data(result.plot);
     }
 
+    /// Set plot data directly (clears loading state).
     pub fn set_plot_data(&mut self, data: PlotData) {
         self.texture = None;
         self.texture_key = None;
@@ -107,6 +116,7 @@ impl PlotPanel {
         self.load_progress = None;
     }
 
+    /// Show a load error and clear any partial plot.
     pub fn set_error(&mut self, message: String) {
         self.plot_data = None;
         self.texture = None;
@@ -115,10 +125,12 @@ impl PlotPanel {
         self.load_progress = None;
     }
 
+    /// Returns `true` when plot data is ready and loading has finished.
     pub fn is_plot_ready(&self) -> bool {
         self.plot_data.is_some() && self.load_progress.is_none()
     }
 
+    /// Render the plot panel (controls, progress bar, line plot or heatmap).
     pub fn ui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         ui.heading("Plot");
         ui.separator();

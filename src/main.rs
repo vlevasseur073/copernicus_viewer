@@ -1,3 +1,8 @@
+//! Copernicus Viewer — GUI binary entry point.
+//!
+//! Initializes the platform layer, logging, and egui/eframe, then runs
+//! [`app::CopernicusViewer`] with optional product paths from the command line.
+
 mod app;
 mod demo_capture;
 mod file_browser;

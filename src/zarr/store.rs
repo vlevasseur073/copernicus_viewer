@@ -16,12 +16,23 @@ use super::tree::{apply_root_metadata, build_tree, ZarrTree};
 
 pub use super::location::resolve_zarr_product_path;
 
+/// An opened EOPF Zarr product with readable storage and a pre-built hierarchy tree.
+///
+/// Array chunk data is not loaded at open time; use [`crate::plot::load_plot_data`] or
+/// comparison helpers when pixel values are needed.
 pub struct ZarrStore {
+    /// Backing zarrs storage (filesystem, zip archive, or S3 via async adapter).
     pub storage: ReadableListableStorage,
+    /// Canonical product identifier (absolute local path or `s3://` URI).
     pub root_path: String,
+    /// Hierarchy built from group/array metadata at open time.
     pub tree: ZarrTree,
 }
 
+/// Open an EOPF Zarr product from a local path or `s3://` URI.
+///
+/// Accepts `.zarr` directories, `.zarr.zip` archives (local only), and nested paths
+/// that are resolved to the product root automatically.
 pub fn open_store(input: &str) -> Result<ZarrStore> {
     let loc = parse_product_location(input)?;
     let resolved = resolve_product_location(loc)?;

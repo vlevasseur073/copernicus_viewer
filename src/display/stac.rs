@@ -2,18 +2,28 @@ use serde_json::{Map, Value};
 
 use crate::zarr::{ZarrNodeKind, ZarrTreeNode};
 
+/// Node in a foldable STAC / EOPF attribute tree.
 #[derive(Clone, Debug)]
 pub enum AttributeNode {
+    /// Leaf scalar attribute.
     Scalar {
+        /// Attribute key.
         name: String,
+        /// Formatted display value.
         value: String,
     },
+    /// Nested object rendered as a collapsible group.
     Group {
+        /// Group label (from colon-separated keys or JSON object keys).
         name: String,
+        /// Child attributes or nested groups.
         children: Vec<AttributeNode>,
     },
+    /// JSON array rendered as an indexed list.
     Array {
+        /// Array attribute name.
         name: String,
+        /// One node per array element.
         children: Vec<AttributeNode>,
     },
 }
@@ -30,6 +40,7 @@ pub fn build_attribute_tree(attrs: &Map<String, Value>) -> Vec<AttributeNode> {
     object_to_nodes(&merged)
 }
 
+/// Render a foldable attribute tree in an egui panel.
 pub fn render_attribute_tree(ui: &mut egui::Ui, nodes: &[AttributeNode], id_prefix: &str) {
     for (index, node) in nodes.iter().enumerate() {
         render_attribute_node(ui, node, &format!("{id_prefix}/{index}"));
@@ -80,6 +91,7 @@ fn render_attribute_node(ui: &mut egui::Ui, node: &AttributeNode, id_path: &str)
     }
 }
 
+/// Merge colon-separated flat keys (e.g. `properties:product:type`) into nested JSON objects.
 pub fn merge_flat_attributes(attrs: &Map<String, Value>) -> Map<String, Value> {
     merge_colon_keys(attrs)
 }

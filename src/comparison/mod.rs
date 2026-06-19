@@ -1,4 +1,8 @@
-//! Side-by-side and difference views across open EOPF Zarr products.
+//! Side-by-side comparison of two EOPF Zarr products (structure, variable data, CF flags).
+//!
+//! The core API is [`compare_products`] / [`compare_products_with_options`]. The GUI
+//! wraps these in [`ComparisonTool`]; the `compare_products` binary example exposes
+//! the same logic on the command line.
 
 mod array_io;
 mod compare;
@@ -54,11 +58,13 @@ pub(crate) fn product_label(store: &ZarrStore) -> String {
 }
 
 impl ComparisonTool {
+    /// Open the comparison window (requires at least two products for a meaningful run).
     pub fn show(&mut self, store_count: usize) {
         self.open = true;
         self.clamp_indices(store_count);
     }
 
+    /// Open the comparison window and immediately compare two open products by index.
     pub fn open_and_compare(&mut self, left: usize, right: usize, stores: &[Arc<ZarrStore>]) {
         self.open = true;
         self.left_index = left;
@@ -73,10 +79,12 @@ impl ComparisonTool {
         }
     }
 
+    /// Returns `true` after a comparison has been run in this session.
     pub fn has_result(&self) -> bool {
         self.result.is_some()
     }
 
+    /// Render the comparison window and controls.
     pub fn ui(&mut self, ctx: &egui::Context, stores: &[Arc<ZarrStore>]) {
         if !self.open {
             return;

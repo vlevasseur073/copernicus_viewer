@@ -9,20 +9,29 @@ use zarrs::storage::ReadableListableStorage;
 
 use crate::zarr::{ZarrNodeKind, ZarrTreeNode};
 
+/// Coordinate metadata and axis values for geo-referenced plots.
 #[derive(Clone, Debug, Default)]
 pub struct GeorefInfo {
+    /// CRS identifier from array or coordinate attributes.
     pub crs: Option<String>,
+    /// Name of the X / longitude dimension.
     pub x_name: String,
+    /// Name of the Y / latitude dimension.
     pub y_name: String,
+    /// Coordinate values along X for the plotted subset.
     pub x_coords: Option<Vec<f64>>,
+    /// Coordinate values along Y for the plotted subset.
     pub y_coords: Option<Vec<f64>>,
+    /// Units for the X coordinate variable.
     pub x_unit: Option<String>,
+    /// Units for the Y coordinate variable.
     pub y_unit: Option<String>,
 }
 
 const X_ALIASES: &[&str] = &["x", "lon", "longitude", "easting"];
 const Y_ALIASES: &[&str] = &["y", "lat", "latitude", "northing"];
 
+/// Resolve coordinate arrays and CRS for a plotted array subset.
 pub fn resolve_georef(
     storage: &ReadableListableStorage,
     tree: &ZarrTreeNode,
@@ -203,6 +212,7 @@ fn read_as_f64(
     read_as!(f64);
 }
 
+/// Format an axis tick label from coordinate values or a fallback index.
 pub fn axis_label(info: &GeorefInfo, axis: char, index: usize, fallback: f64) -> String {
     let coords = match axis {
         'x' => info.x_coords.as_ref(),
@@ -218,6 +228,7 @@ pub fn axis_label(info: &GeorefInfo, axis: char, index: usize, fallback: f64) ->
     format!("{fallback:.0}")
 }
 
+/// One-line summary of CRS and coordinate extents for plot captions.
 pub fn extent_description(info: &GeorefInfo) -> String {
     let mut parts = Vec::new();
     if let Some(crs) = &info.crs {

@@ -1,22 +1,34 @@
 use ndarray::ArrayD;
 
+/// Summary statistics for a loaded numeric array subset.
 #[derive(Clone, Debug, Default)]
 pub struct ArrayStatistics {
+    /// Total element count in the loaded subset.
     pub element_count: usize,
+    /// Count of finite (non-NaN, non-infinite) elements.
     pub finite_count: usize,
+    /// Count of non-finite elements.
     pub nan_count: usize,
+    /// Minimum over finite values.
     pub min: Option<f64>,
+    /// Maximum over finite values.
     pub max: Option<f64>,
+    /// Mean over finite values.
     pub mean: Option<f64>,
+    /// Standard deviation over finite values.
     pub std_dev: Option<f64>,
 }
 
+/// Tabular preview of array values for display in the inspector.
 #[derive(Clone, Debug, Default)]
 pub struct ArrayPreview {
+    /// Column header labels.
     pub column_labels: Vec<String>,
+    /// Row-major table cells (formatted strings).
     pub rows: Vec<Vec<String>>,
 }
 
+/// Compute min/max/mean/std over finite values in `values`.
 pub fn compute_statistics(values: &ArrayD<f64>) -> ArrayStatistics {
     let element_count = values.len();
     let mut finite = Vec::new();
@@ -59,6 +71,7 @@ pub fn compute_statistics(values: &ArrayD<f64>) -> ArrayStatistics {
     }
 }
 
+/// Build a truncated tabular preview of `values` for display.
 pub fn build_preview(values: &ArrayD<f64>, max_rows: usize, max_cols: usize) -> ArrayPreview {
     let shape = values.shape();
 
@@ -113,6 +126,7 @@ pub fn build_preview(values: &ArrayD<f64>, max_rows: usize, max_cols: usize) -> 
     ArrayPreview::default()
 }
 
+/// Format statistics as monospace text for the inspector.
 pub fn format_statistics(stats: &ArrayStatistics) -> String {
     let mut lines = vec!["Statistics (loaded subset):".to_string()];
     lines.push(format!("    elements: {}", stats.element_count));
@@ -135,6 +149,7 @@ pub fn format_statistics(stats: &ArrayStatistics) -> String {
     lines.join("\n")
 }
 
+/// Format a preview table as monospace text for the inspector.
 pub fn format_preview_table(preview: &ArrayPreview) -> String {
     if preview.rows.is_empty() {
         return "Preview: (empty)".to_string();

@@ -11,12 +11,17 @@ use crate::zarr::error::IoError;
 /// S3 connection parameters resolved from config file or environment.
 #[derive(Debug, Clone)]
 pub struct S3Config {
+    /// Access key ID for the configured endpoint.
     pub access_key_id: String,
+    /// Secret access key.
     pub secret_access_key: String,
+    /// AWS or custom S3 region name.
     pub region: String,
+    /// S3-compatible endpoint URL.
     pub endpoint: String,
 }
 
+/// S3 client scoped to a bucket prefix (re-exported alias for zarrs-object-store).
 pub type PrefixedS3 = zarrs_object_store::object_store::prefix::PrefixStore<AmazonS3>;
 
 impl S3Config {
@@ -91,7 +96,7 @@ impl S3Config {
             .map_err(|e| IoError::S3Client(format!("failed to build S3 client: {e}")))
     }
 
-    /// Build an `AmazonS3` client wrapped in a [`PrefixStore`] so that all
+    /// Build an `AmazonS3` client wrapped in a prefix store so that all
     /// operations are scoped to `prefix` within the bucket.
     ///
     /// The underlying `AmazonS3` is fetched from the per-bucket cache

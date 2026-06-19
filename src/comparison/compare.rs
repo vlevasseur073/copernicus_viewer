@@ -18,18 +18,31 @@ pub use super::options::CompareOptions as ComparisonOptions;
 /// Outcome of comparing two open EOPF Zarr products.
 #[derive(Clone, Debug)]
 pub struct ComparisonResult {
+    /// Display label for the reference product (final path segment).
     pub reference_label: String,
+    /// Display label for the new product.
     pub new_label: String,
+    /// Pre-formatted summary report (non-verbose).
     pub summary: String,
+    /// Overall pass when structure, data, and flags all succeed.
     pub success: bool,
+    /// Whether both products have the same hierarchy paths.
     pub isomorphic: bool,
+    /// `true` when fatal structure differences prevented data comparison.
     pub skip_data: bool,
+    /// Structure and metadata comparison details.
     pub structure: StructureReport,
+    /// Measurement variable data comparison details.
     pub data: DataReport,
+    /// CF flag variable comparison details.
     pub flags: FlagReport,
+    /// Median relative score across variables (relative mode only).
     pub global_score: Option<f64>,
+    /// Median equal-percentage score across flag variables.
     pub global_flag_score: Option<f64>,
+    /// Outlier ratio threshold used for this run.
     pub threshold_nb_outliers: f64,
+    /// Coverage difference threshold used for this run.
     pub threshold_coverage: f64,
 }
 

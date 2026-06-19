@@ -2,12 +2,13 @@
 name = "copernicus_viewer"
 version = "0.1.0"
 edition = "2024"
-description = "GUI viewer for EOPF Zarr products"
+description = "GUI viewer and library for inspecting and comparing EOPF Zarr products from the Copernicus ecosystem"
 license = "MIT OR Apache-2.0"
 authors = ["Vincent Levasseur"]
 readme = "README.md"
 repository = "https://github.com/vlevasseur073/copernicus_viewer"
 homepage = "https://github.com/vlevasseur073/copernicus_viewer"
+documentation = "https://docs.rs/copernicus_viewer"
 keywords = ["zarr", "copernicus", "eopf", "viewer", "gui"]
 categories = ["science", "visualization", "gui"]
 rust-version = "1.92"

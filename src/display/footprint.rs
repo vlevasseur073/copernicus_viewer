@@ -4,32 +4,41 @@ use crate::display::stac::merge_flat_attributes;
 
 const STAC_ITEM_KEYS: &[&str] = &["stac_discovery", "stac", "item", "stac_item"];
 
+/// Geographic footprint extracted from root STAC / EOPF metadata.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProductFootprint {
+    /// Bounding box as `[west, south, east, north]`.
     pub bbox: [f64; 4],
+    /// Coordinate reference system identifier, when declared.
     pub crs: Option<String>,
     /// Outer ring lon/lat vertices when a polygon geometry is available.
     pub polygon: Option<Vec<[f64; 2]>>,
+    /// STAC item or product identifier.
     pub product_id: Option<String>,
 }
 
 impl ProductFootprint {
+    /// Western boundary (minimum longitude or easting).
     pub fn west(&self) -> f64 {
         self.bbox[0]
     }
 
+    /// Southern boundary (minimum latitude or northing).
     pub fn south(&self) -> f64 {
         self.bbox[1]
     }
 
+    /// Eastern boundary (maximum longitude or easting).
     pub fn east(&self) -> f64 {
         self.bbox[2]
     }
 
+    /// Northern boundary (maximum latitude or northing).
     pub fn north(&self) -> f64 {
         self.bbox[3]
     }
 
+    /// One-line summary of bbox and CRS for display.
     pub fn summary(&self) -> String {
         let crs = self.crs.as_deref().unwrap_or("EPSG:4326");
         format!(
@@ -42,6 +51,7 @@ impl ProductFootprint {
     }
 }
 
+/// Parse a product footprint from root `.zattrs` STAC metadata.
 pub fn parse_product_footprint(attrs: &Map<String, Value>) -> Option<ProductFootprint> {
     if attrs.is_empty() {
         return None;

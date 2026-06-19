@@ -1,3 +1,8 @@
+//! Metadata display, statistics, STAC attributes, and footprint mapping for EOPF products.
+//!
+//! The inspector combines xarray-style text representations with optional coverage maps
+//! and numeric summaries for selected array variables.
+
 pub mod footprint;
 pub mod inspector;
 pub mod map;

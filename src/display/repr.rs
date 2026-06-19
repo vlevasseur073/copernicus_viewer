@@ -2,11 +2,15 @@ use serde_json::Value;
 
 use crate::zarr::{ZarrNodeKind, ZarrTreeNode};
 
+/// xarray-style text representation of a hierarchy node.
 pub struct NodeRepr {
+    /// Single-line title (e.g. `<xarray.DataArray 'lst'>`).
     pub title: String,
+    /// Multi-line body with dimensions, dtype, and attributes.
     pub body: String,
 }
 
+/// Format a group or array node as an xarray-inspired text representation.
 pub fn format_node_repr(node: &ZarrTreeNode, product_name: &str) -> NodeRepr {
     match &node.kind {
         ZarrNodeKind::Group { attributes } => format_group_repr(node, attributes, product_name),
