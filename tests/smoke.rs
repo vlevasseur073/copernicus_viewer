@@ -1,5 +1,7 @@
-use copernicus_viewer::display::{parse_root_attributes, InspectorView, AttributeNode};
-use copernicus_viewer::plot::{load_plot_data, parse_cf_flags, FlagSelection, PlotData, PlotRequest};
+use copernicus_viewer::display::{parse_root_attributes, AttributeNode, InspectorView};
+use copernicus_viewer::plot::{
+    load_plot_data, parse_cf_flags, FlagSelection, PlotData, PlotRequest,
+};
 use copernicus_viewer::zarr::{open_store, ZarrNodeKind};
 
 #[test]
@@ -10,7 +12,7 @@ fn opens_sample_product_and_loads_plot() {
         return;
     }
 
-    let store = open_store(path).expect("open store");
+    let store = open_store("sample_data/S03OLCEFR_sample.zarr").expect("open store");
     let node = store
         .tree
         .root
@@ -40,7 +42,7 @@ fn parses_root_attribute_tree() {
         return;
     }
 
-    let store = open_store(path).expect("open store");
+    let store = open_store("sample_data/S03OLCEFR_sample.zarr").expect("open store");
     let root = &store.tree.root;
 
     let tree = parse_root_attributes(root, None).expect("root attrs");
@@ -65,13 +67,14 @@ fn parses_product_footprint_from_sample() {
         return;
     }
 
-    let store = open_store(path).expect("open store");
+    let store = open_store("sample_data/S03OLCEFR_sample.zarr").expect("open store");
     let root = &store.tree.root;
     let ZarrNodeKind::Group { attributes, .. } = &root.kind else {
         panic!("root group");
     };
 
-    let footprint = copernicus_viewer::display::parse_product_footprint(attributes).expect("footprint");
+    let footprint =
+        copernicus_viewer::display::parse_product_footprint(attributes).expect("footprint");
     assert!(footprint.west() < footprint.east());
     assert!(footprint.south() < footprint.north());
 }
@@ -83,7 +86,7 @@ fn loads_bitmask_flag_plot() {
         return;
     }
 
-    let store = open_store(path).expect("open store");
+    let store = open_store("sample_data/S03OLCEFR_sample.zarr").expect("open store");
     let node = store
         .tree
         .root

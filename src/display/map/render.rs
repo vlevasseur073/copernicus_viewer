@@ -85,7 +85,12 @@ pub fn render_footprint_map(ui: &mut Ui, footprint: &ProductFootprint) {
     let pixel_h = BASEMAP_HEIGHT;
     let texture = basemap_texture(ui, view, pixel_w, pixel_h);
 
-    painter.rect_stroke(rect, 4.0, Stroke::new(1.0, Color32::from_gray(70)), egui::StrokeKind::Inside);
+    painter.rect_stroke(
+        rect,
+        4.0,
+        Stroke::new(1.0, Color32::from_gray(70)),
+        egui::StrokeKind::Inside,
+    );
     painter.image(
         texture.id(),
         rect,
@@ -115,19 +120,14 @@ pub fn render_footprint_map(ui: &mut Ui, footprint: &ProductFootprint) {
 
 fn basemap_texture(ui: &Ui, view: MapView, width: u32, height: u32) -> TextureHandle {
     let cache_id = egui::Id::new(("coverage_basemap", view.cache_key()));
-    if let Some(texture) = ui
-        .ctx()
-        .data(|d| d.get_temp::<TextureHandle>(cache_id))
-    {
+    if let Some(texture) = ui.ctx().data(|d| d.get_temp::<TextureHandle>(cache_id)) {
         return texture;
     }
 
     let image = rasterize_basemap(view, width as usize, height as usize);
-    let texture = ui.ctx().load_texture(
-        view.cache_key(),
-        image,
-        TextureOptions::LINEAR,
-    );
+    let texture = ui
+        .ctx()
+        .load_texture(view.cache_key(), image, TextureOptions::LINEAR);
     ui.ctx()
         .data_mut(|d| d.insert_temp(cache_id, texture.clone()));
     texture

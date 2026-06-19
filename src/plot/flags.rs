@@ -135,11 +135,22 @@ fn parse_numeric_list(value: &Value) -> Option<Vec<u64>> {
                 .split_whitespace()
                 .map(parse_u64_token)
                 .collect::<Option<Vec<_>>>()?;
-            if values.is_empty() { None } else { Some(values) }
+            if values.is_empty() {
+                None
+            } else {
+                Some(values)
+            }
         }
         Value::Array(values) => {
-            let parsed = values.iter().map(parse_json_number).collect::<Option<Vec<_>>>()?;
-            if parsed.is_empty() { None } else { Some(parsed) }
+            let parsed = values
+                .iter()
+                .map(parse_json_number)
+                .collect::<Option<Vec<_>>>()?;
+            if parsed.is_empty() {
+                None
+            } else {
+                Some(parsed)
+            }
         }
         Value::Number(number) => number
             .as_u64()
@@ -150,10 +161,16 @@ fn parse_numeric_list(value: &Value) -> Option<Vec<u64>> {
 }
 
 fn parse_u64_token(token: &str) -> Option<u64> {
-    if let Some(stripped) = token.strip_prefix("0x").or_else(|| token.strip_prefix("0X")) {
+    if let Some(stripped) = token
+        .strip_prefix("0x")
+        .or_else(|| token.strip_prefix("0X"))
+    {
         return u64::from_str_radix(stripped, 16).ok();
     }
-    if let Some(stripped) = token.strip_prefix("0b").or_else(|| token.strip_prefix("0B")) {
+    if let Some(stripped) = token
+        .strip_prefix("0b")
+        .or_else(|| token.strip_prefix("0B"))
+    {
         return u64::from_str_radix(stripped, 2).ok();
     }
     token.parse::<i64>().ok().map(|v| v as u64)
@@ -228,8 +245,7 @@ mod tests {
             mode: CfFlagMode::Masks,
             fill_value: Some(255.0),
         };
-        let values =
-            ArrayD::from_shape_vec(IxDyn(&[2, 2]), vec![1.0, 5.0, 4.0, 255.0]).unwrap();
+        let values = ArrayD::from_shape_vec(IxDyn(&[2, 2]), vec![1.0, 5.0, 4.0, 255.0]).unwrap();
         let cloud = apply_flag_selection(&values, &flags, 1);
         assert_eq!(cloud[[0, 0]], 0.0);
         assert_eq!(cloud[[0, 1]], 1.0);

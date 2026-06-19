@@ -4,7 +4,7 @@ A Rust GUI application to explore and visualize [EOPF](https://cpm.pages.eopf.co
 
 ## Features
 
-- Open EOPF Zarr stores (`.zarr` directories or `.zarr.zip` archives)
+- Open EOPF Zarr stores (`.zarr` directories, `.zarr.zip` archives, or `s3://` URIs on AWS S3)
 - Browse the product hierarchy (groups and variables) in a tree view
 - Inspect metadata with an xarray-inspired representation (DataTree / Group / DataArray with attributes)
 - **Product attributes** tree for root metadata (nested STAC / EOPF attributes, foldable like the hierarchy)
@@ -61,7 +61,7 @@ sudo apt install libxkbcommon-x11-0 libgl1-mesa-dri
 
 Runtime for the GTK file dialog (optional build): `libgtk-3-0`.
 
-**Opening products:** **File → Open Zarr…** opens an in-app browser for `.zarr` directories and `.zarr.zip` archives — click or double-click a product, or paste a path and press **Open**. Use **System picker…** inside that dialog for the native file chooser; it automatically uses a folder picker for `.zarr` paths and a file picker for `.zip` paths. You can open several products at once; each appears as a top-level entry in the **Hierarchy** panel. Close one with **✕** next to its name or **File → Close product**. Opening a product reads hierarchy metadata only; array values are loaded when you select a variable to plot.
+**Opening products:** **File → Open Zarr…** opens an in-app browser for local `.zarr` directories and `.zarr.zip` archives — click or double-click a product, or paste a path and press **Open**. Use **S3** in that dialog to browse configured buckets and prefixes on object storage (see [S3 object storage](#s3-object-storage)). You can also paste an `s3://bucket/path/product.zarr` URI directly. Use **System picker…** for the native file chooser on local paths; it automatically uses a folder picker for `.zarr` paths and a file picker for `.zip` paths. You can open several products at once; each appears as a top-level entry in the **Hierarchy** panel. Close one with **✕** next to its name or **File → Close product**. Opening a product reads hierarchy metadata only; array values are loaded when you select a variable to plot.
 
 If the native dialog is empty or opens twice on WSL, rebuild with the GTK backend:
 
@@ -142,7 +142,36 @@ Use **File → Open Zarr…** to load additional EOPF products. Pass one or more
 
 ```bash
 cargo run -- /path/to/product_a.zarr /path/to/product_b.zarr
+cargo run -- s3://my-eopf-bucket/eopf/products/S03OLCEFR_202309.zarr
 ```
+
+## S3 object storage
+
+Remote EOPF Zarr directory stores on AWS S3 (including custom endpoints) can be opened with an `s3://` URI from the command line or by pasting the URI in **File → Open Zarr…**. You can also browse remote products in that dialog: click **S3** to list buckets from your config file, then navigate prefixes and double-click a `.zarr` product to open it. Use **Local** to return to filesystem browsing. The in-app directory listing for local paths is unchanged.
+
+### Credentials
+
+Credentials are resolved in this order (bucket name from the URI selects the INI section):
+
+1. Config file from `COPERNICUS_VIEWER_S3_CONFIG` or `S3_CONFIG` (if set)
+2. Default config at `~/.config/cp-rs/s3.conf`
+3. `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_ENDPOINT`, `S3_REGION`
+4. `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL`, `AWS_REGION`
+
+INI format (rclone-style), one section per bucket:
+
+```ini
+[my-eopf-bucket]
+type = s3
+access_key_id = AKID
+secret_access_key = SKEY
+region = eu-west-1
+endpoint = https://s3.example.com
+```
+
+Nested paths are resolved to the Zarr product root automatically (same as local paths), e.g. `s3://bucket/path/product.zarr/measurements/lst` opens `s3://bucket/path/product.zarr`.
+
+`.zarr.zip` archives on S3 are not supported in this version.
 
 ## Releasing (maintainers)
 

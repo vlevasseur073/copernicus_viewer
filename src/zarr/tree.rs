@@ -200,11 +200,12 @@ fn chunk_shape_from_v3(chunk_grid: &zarrs::metadata::v3::MetadataV3) -> Vec<u64>
 }
 
 fn sort_children(node: &mut ZarrTreeNode) {
-    node.children.sort_by(|a, b| match (a.is_group(), b.is_group()) {
-        (true, false) => std::cmp::Ordering::Less,
-        (false, true) => std::cmp::Ordering::Greater,
-        _ => a.name.cmp(&b.name),
-    });
+    node.children
+        .sort_by(|a, b| match (a.is_group(), b.is_group()) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.cmp(&b.name),
+        });
     for child in &mut node.children {
         sort_children(child);
     }
@@ -259,7 +260,7 @@ impl ZarrTreeNode {
     pub fn is_empty_array(&self) -> bool {
         matches!(
             &self.kind,
-            ZarrNodeKind::Array { shape, .. } if shape.iter().any(|&dim| dim == 0)
+            ZarrNodeKind::Array { shape, .. } if shape.contains(&0)
         )
     }
 }

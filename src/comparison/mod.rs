@@ -14,7 +14,9 @@ use eframe::egui;
 
 use crate::zarr::ZarrStore;
 
-pub use compare::{compare_products, compare_products_with_options, ComparisonOptions, ComparisonResult};
+pub use compare::{
+    compare_products, compare_products_with_options, ComparisonOptions, ComparisonResult,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ErrorMode {
@@ -98,8 +100,7 @@ impl ComparisonTool {
                 if stores.len() < 2 {
                     ui.add_space(8.0);
                     ui.label(
-                        egui::RichText::new("Open at least two products to use this tool.")
-                            .weak(),
+                        egui::RichText::new("Open at least two products to use this tool.").weak(),
                     );
                     return;
                 }
@@ -143,14 +144,7 @@ impl ComparisonTool {
                     } else {
                         egui::Color32::LIGHT_RED
                     };
-                    ui.colored_label(
-                        color,
-                        if result.success {
-                            "PASSED"
-                        } else {
-                            "FAILED"
-                        },
-                    );
+                    ui.colored_label(color, if result.success { "PASSED" } else { "FAILED" });
                     let mut report = result.formatted_summary(self.verbose);
                     egui::ScrollArea::vertical()
                         .auto_shrink([false, false])

@@ -1,7 +1,7 @@
 use crate::display::footprint::{parse_product_footprint, ProductFootprint};
 use crate::display::map::render_footprint_map;
-use crate::display::stats::{ArrayPreview, ArrayStatistics};
 use crate::display::stac::{render_attribute_tree, AttributeNode};
+use crate::display::stats::{ArrayPreview, ArrayStatistics};
 use crate::display::{format_node_repr, parse_root_attributes};
 use crate::zarr::{ZarrNodeKind, ZarrTreeNode};
 
@@ -53,11 +53,7 @@ fn root_metadata(
     node: &ZarrTreeNode,
     root: Option<&ZarrTreeNode>,
 ) -> (Option<Vec<AttributeNode>>, Option<ProductFootprint>) {
-    let root_node = if node.path == "/" {
-        Some(node)
-    } else {
-        root
-    };
+    let root_node = if node.path == "/" { Some(node) } else { root };
 
     let Some(root_node) = root_node else {
         return (None, None);

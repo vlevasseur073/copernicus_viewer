@@ -144,13 +144,7 @@ fn compare_node_pair(
             );
             if options.chunks {
                 if lc == rc {
-                    compare_field(
-                        &left.path,
-                        "chunks",
-                        true,
-                        report,
-                        "identical",
-                    );
+                    compare_field(&left.path, "chunks", true, report, "identical");
                 } else if shape_ok {
                     report.issues.push(StructureIssue {
                         path: left.path.clone(),
@@ -256,9 +250,9 @@ pub fn is_coordinate_variable(node: &ZarrTreeNode) -> bool {
         return true;
     }
 
-    if attribute_str(attributes, "axis").is_some_and(|axis| {
-        matches!(axis.as_str(), "T" | "X" | "Y" | "Z")
-    }) {
+    if attribute_str(attributes, "axis")
+        .is_some_and(|axis| matches!(axis.as_str(), "T" | "X" | "Y" | "Z"))
+    {
         return true;
     }
 
@@ -276,7 +270,10 @@ pub fn is_coordinate_variable(node: &ZarrTreeNode) -> bool {
 }
 
 pub fn is_data_variable(node: &ZarrTreeNode) -> bool {
-    let ZarrNodeKind::Array { attributes, dtype, .. } = &node.kind else {
+    let ZarrNodeKind::Array {
+        attributes, dtype, ..
+    } = &node.kind
+    else {
         return false;
     };
     if node.is_empty_array() {

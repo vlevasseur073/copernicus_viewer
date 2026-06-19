@@ -77,9 +77,7 @@ pub fn build_preview(values: &ArrayD<f64>, max_rows: usize, max_cols: usize) -> 
     if shape.len() == 1 {
         let n = shape[0].min(max_cols);
         let column_labels: Vec<String> = (0..n).map(|i| i.to_string()).collect();
-        let row = (0..n)
-            .map(|i| format_cell(values[[i]]))
-            .collect::<Vec<_>>();
+        let row = (0..n).map(|i| format_cell(values[[i]])).collect::<Vec<_>>();
         return ArrayPreview {
             column_labels,
             rows: vec![row],
@@ -96,10 +94,8 @@ pub fn build_preview(values: &ArrayD<f64>, max_rows: usize, max_cols: usize) -> 
             let mut line = Vec::with_capacity(width);
             for col in 0..width {
                 let mut index = vec![0usize; shape.len()];
-                if shape.len() > 2 {
-                    for d in 0..shape.len() - 2 {
-                        index[d] = 0;
-                    }
+                for ind in index.iter_mut() {
+                    *ind = 0;
                 }
                 index[shape.len() - 2] = row;
                 index[shape.len() - 1] = col;

@@ -57,10 +57,19 @@ fn run(args: &[String]) -> Result<(), String> {
     let (reference, new, options, verbose) = parse_args(args)?;
 
     eprintln!("Opening reference: {}", reference.display());
-    let reference_store = open_store(&reference).map_err(|e| e.to_string())?;
+    let reference_store = open_store(
+        reference
+            .to_str()
+            .ok_or_else(|| format!("invalid reference path: {}", reference.display()))?,
+    )
+    .map_err(|e| e.to_string())?;
 
     eprintln!("Opening new:       {}", new.display());
-    let new_store = open_store(&new).map_err(|e| e.to_string())?;
+    let new_store = open_store(
+        new.to_str()
+            .ok_or_else(|| format!("invalid new path: {}", new.display()))?,
+    )
+    .map_err(|e| e.to_string())?;
 
     eprintln!("Comparing…");
     let result = compare_products_with_options(&reference_store, &new_store, &options);

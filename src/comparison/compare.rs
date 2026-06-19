@@ -2,14 +2,16 @@
 
 use crate::zarr::ZarrStore;
 
-use super::data::{compare_variable_data, format_variable_detail, global_relative_score, DataReport};
+use super::data::{
+    compare_variable_data, format_variable_detail, global_relative_score, DataReport,
+};
 use super::flags::{compare_flag_variables, global_flag_score as median_flag_score, FlagReport};
 use super::options::CompareOptions;
+use super::product_label;
 use super::structure::{
     collect_data_variables, collect_flag_variables, compare_structure, StructureReport,
     StructureStatus,
 };
-use super::product_label;
 
 pub use super::options::CompareOptions as ComparisonOptions;
 
@@ -257,7 +259,11 @@ fn format_summary(result: &ComparisonResult, verbose: bool) -> String {
         if verbose {
             lines.push(format!(
                 "  ✓ {}",
-                format_variable_detail(var, result.threshold_nb_outliers, result.threshold_coverage)
+                format_variable_detail(
+                    var,
+                    result.threshold_nb_outliers,
+                    result.threshold_coverage
+                )
             ));
         } else {
             lines.push(format!("  ✓ {}", var.path));
@@ -317,8 +323,8 @@ mod tests {
             return;
         }
 
-        let left = open_store(path).expect("open left");
-        let right = open_store(path).expect("open right");
+        let left = open_store(path.to_str().unwrap()).expect("open left");
+        let right = open_store(path.to_str().unwrap()).expect("open right");
         let result = compare_products(&left, &right);
         assert!(result.isomorphic);
         assert!(result.success, "{}", result.summary);
@@ -336,8 +342,8 @@ mod tests {
             return;
         }
 
-        let left = open_store(ref_path).expect("open reference");
-        let right = open_store(new_path).expect("open new");
+        let left = open_store(ref_path.to_str().unwrap()).expect("open reference");
+        let right = open_store(new_path.to_str().unwrap()).expect("open new");
         let result = compare_products(&left, &right);
 
         assert!(result.isomorphic, "{}", result.summary);

@@ -103,9 +103,7 @@ fn insert_path(map: &mut Map<String, Value>, segments: &[&str], value: Value) {
     }
 
     let key = segments[0].to_string();
-    let entry = map
-        .entry(key)
-        .or_insert_with(|| Value::Object(Map::new()));
+    let entry = map.entry(key).or_insert_with(|| Value::Object(Map::new()));
     if let Value::Object(obj) = entry {
         insert_path(obj, &segments[1..], value);
     }
@@ -285,13 +283,12 @@ mod tests {
             .expect("properties group");
 
         assert!(properties.iter().any(|node| match node {
-            AttributeNode::Group { name, children } if name == "product" => children.iter().any(
-                |child| matches!(
+            AttributeNode::Group { name, children } if name == "product" =>
+                children.iter().any(|child| matches!(
                     child,
                     AttributeNode::Scalar { name, value }
                         if name == "type" && value == "'OLCEFR'"
-                )
-            ),
+                )),
             _ => false,
         }));
     }

@@ -185,11 +185,7 @@ fn window_icon() -> IconData {
 
             let (r, g, b) = if dist <= radius + 1.0 {
                 let t = ((radius + 1.0 - dist) / 1.0).clamp(0.0, 1.0);
-                (
-                    lerp_u8(30, 0, t),
-                    lerp_u8(34, 148, t),
-                    lerp_u8(40, 168, t),
-                )
+                (lerp_u8(30, 0, t), lerp_u8(34, 148, t), lerp_u8(40, 168, t))
             } else {
                 (30, 34, 40)
             };

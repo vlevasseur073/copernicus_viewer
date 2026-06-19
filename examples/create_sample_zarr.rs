@@ -25,25 +25,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Arc::new(FilesystemStore::new(out.to_str().unwrap())?);
 
     GroupBuilder::new()
-        .attributes(serde_json::json!({
-            "stac_version": "1.1.0",
-            "type": "Feature",
-            "id": "S03OLCEFR_sample",
-            "properties:product:type": "OLCEFR",
-            "properties:description": "Sample EOPF-style product for Copernicus Viewer",
-            "properties:datetime": "2024-06-01T12:00:00Z",
-            "properties:platform": "Sentinel-3",
-            "extent": {
-                "spatial": {
-                    "bbox": [-5.0, 45.0, 1.4, 48.2],
-                    "crs": "EPSG:4326"
-                }
-            },
-            "links": [
-                {"rel": "self", "href": "https://example.test/items/S03OLCEFR_sample"},
-                {"rel": "collection", "href": "https://example.test/collections/olcefr"}
-            ]
-        }).as_object().unwrap().clone())
+        .attributes(
+            serde_json::json!({
+                "stac_version": "1.1.0",
+                "type": "Feature",
+                "id": "S03OLCEFR_sample",
+                "properties:product:type": "OLCEFR",
+                "properties:description": "Sample EOPF-style product for Copernicus Viewer",
+                "properties:datetime": "2024-06-01T12:00:00Z",
+                "properties:platform": "Sentinel-3",
+                "extent": {
+                    "spatial": {
+                        "bbox": [-5.0, 45.0, 1.4, 48.2],
+                        "crs": "EPSG:4326"
+                    }
+                },
+                "links": [
+                    {"rel": "self", "href": "https://example.test/items/S03OLCEFR_sample"},
+                    {"rel": "collection", "href": "https://example.test/collections/olcefr"}
+                ]
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        )
         .build(store.clone(), "/")?
         .store_metadata()?;
 
@@ -52,19 +57,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .store_metadata()?;
 
     GroupBuilder::new()
-        .attributes(serde_json::json!({
-            "crs": "EPSG:4326"
-        }).as_object().unwrap().clone())
+        .attributes(
+            serde_json::json!({
+                "crs": "EPSG:4326"
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        )
         .build(store.clone(), "/measurements/image")?
         .store_metadata()?;
 
     let y = ArrayBuilder::new(vec![64], vec![64], float32(), 0.0f32)
         .dimension_names(["y"].into())
-        .attributes(serde_json::json!({
-            "long_name": "latitude",
-            "units": "degrees_north",
-            "standard_name": "latitude"
-        }).as_object().unwrap().clone())
+        .attributes(
+            serde_json::json!({
+                "long_name": "latitude",
+                "units": "degrees_north",
+                "standard_name": "latitude"
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        )
         .build(store.clone(), "/measurements/image/y")?;
     y.store_metadata()?;
     let y_coords: Vec<f32> = (0..64).map(|i| 45.0 + i as f32 * 0.05).collect();
@@ -72,11 +87,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let x = ArrayBuilder::new(vec![128], vec![128], float32(), 0.0f32)
         .dimension_names(["x"].into())
-        .attributes(serde_json::json!({
-            "long_name": "longitude",
-            "units": "degrees_east",
-            "standard_name": "longitude"
-        }).as_object().unwrap().clone())
+        .attributes(
+            serde_json::json!({
+                "long_name": "longitude",
+                "units": "degrees_east",
+                "standard_name": "longitude"
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        )
         .build(store.clone(), "/measurements/image/x")?;
     x.store_metadata()?;
     let x_coords: Vec<f32> = (0..128).map(|i| -5.0 + i as f32 * 0.05).collect();
@@ -84,11 +104,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let radiance = ArrayBuilder::new(vec![64, 128], vec![32, 32], float32(), 0.0f32)
         .dimension_names(["y", "x"].into())
-        .attributes(serde_json::json!({
-            "long_name": "Top of atmosphere radiance",
-            "units": "mW m-2 sr-1 nm-1",
-            "crs": "EPSG:4326"
-        }).as_object().unwrap().clone())
+        .attributes(
+            serde_json::json!({
+                "long_name": "Top of atmosphere radiance",
+                "units": "mW m-2 sr-1 nm-1",
+                "crs": "EPSG:4326"
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        )
         .build(store.clone(), "/measurements/image/oa01_radiance")?;
     radiance.store_metadata()?;
 
@@ -103,13 +128,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let qa_flags = ArrayBuilder::new(vec![64, 128], vec![32, 32], uint8(), 255u8)
         .dimension_names(["y", "x"].into())
-        .attributes(serde_json::json!({
-            "long_name": "Quality flags",
-            "flag_meanings": "good saturation cloud shadow",
-            "flag_masks": "1 2 4 8",
-            "_FillValue": 255,
-            "comment": "CF bitmask variable — select individual bits in the plot panel"
-        }).as_object().unwrap().clone())
+        .attributes(
+            serde_json::json!({
+                "long_name": "Quality flags",
+                "flag_meanings": "good saturation cloud shadow",
+                "flag_masks": "1 2 4 8",
+                "_FillValue": 255,
+                "comment": "CF bitmask variable — select individual bits in the plot panel"
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        )
         .build(store.clone(), "/measurements/image/qa_flags")?;
     qa_flags.store_metadata()?;
 
@@ -140,10 +170,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let sza = ArrayBuilder::new(vec![128], vec![128], float32(), 0.0f32)
         .dimension_names(["x"].into())
-        .attributes(serde_json::json!({
-            "long_name": "Solar zenith angle",
-            "units": "degrees"
-        }).as_object().unwrap().clone())
+        .attributes(
+            serde_json::json!({
+                "long_name": "Solar zenith angle",
+                "units": "degrees"
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        )
         .build(store.clone(), "/conditions/geometry/sza")?;
     sza.store_metadata()?;
     let line: Vec<f32> = (0..128)
