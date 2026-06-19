@@ -323,8 +323,8 @@ mod tests {
             return;
         }
 
-        let left = open_store(path).expect("open left");
-        let right = open_store(path).expect("open right");
+        let left = open_store(path.to_str().unwrap()).expect("open left");
+        let right = open_store(path.to_str().unwrap()).expect("open right");
         let result = compare_products(&left, &right);
         assert!(result.isomorphic);
         assert!(result.success, "{}", result.summary);
@@ -342,8 +342,8 @@ mod tests {
             return;
         }
 
-        let left = open_store(ref_path).expect("open reference");
-        let right = open_store(new_path).expect("open new");
+        let left = open_store(ref_path.to_str().unwrap()).expect("open reference");
+        let right = open_store(new_path.to_str().unwrap()).expect("open new");
         let result = compare_products(&left, &right);
 
         assert!(result.isomorphic, "{}", result.summary);

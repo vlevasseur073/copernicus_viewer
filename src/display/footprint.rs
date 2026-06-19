@@ -372,7 +372,7 @@ mod tests {
             return;
         }
 
-        let store = crate::zarr::open_store(path).expect("open store");
+        let store = crate::zarr::open_store(path.to_str().unwrap()).expect("open store");
         let crate::zarr::ZarrNodeKind::Group { attributes, .. } = &store.tree.root.kind else {
             panic!("root group");
         };

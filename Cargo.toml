@@ -43,6 +43,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2.0.18"
 tracing = "0.1.44"
+tokio = { version = "1", features = ["rt-multi-thread"] }
 zarrs = { version = "0.23", features = ["filesystem", "ndarray", "blosc", "zstd", "gzip", "transpose"] }
 zarrs_object_store = { version = "0.6.2", features = ["aws"] }
 zarrs_zip = "0.5"
