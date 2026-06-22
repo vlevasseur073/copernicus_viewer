@@ -11,7 +11,8 @@ use copernicus_viewer::comparison::ComparisonTool;
 use copernicus_viewer::display::{render_inspector, InspectorView};
 use copernicus_viewer::plot::{load_plot_data, shared_progress, PlotLoadResult, PlotPanel};
 use copernicus_viewer::zarr::{
-    open_store, resolve_zarr_product_path, ZarrNodeKind, ZarrStore, ZarrTreeNode,
+    download_s3_product, is_s3_product, open_store, parse_s3_location, resolve_zarr_product_path,
+    DownloadProgressCallback, ZarrNodeKind, ZarrStore, ZarrTreeNode,
 };
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct SelectedNode {
@@ -47,6 +48,10 @@ struct PendingNativeOpen {
     path_hint: String,
 }
 
+struct PendingDownloadPick {
+    store_index: usize,
+}
+
 enum LoadMessage {
     StoreReady {
         location: String,
@@ -68,6 +73,16 @@ enum LoadMessage {
         path: String,
         result: Result<PlotLoadResult, String>,
     },
+    DownloadProgress {
+        _store_index: usize,
+        objects_done: usize,
+        bytes_done: u64,
+        current_key: String,
+    },
+    DownloadReady {
+        _store_index: usize,
+        result: Result<PathBuf, String>,
+    },
 }
 
 /// Root egui application state for the Copernicus Viewer window.
@@ -84,6 +99,8 @@ pub struct CopernicusViewer {
     open_product_dialog: OpenProductDialog,
     comparison: ComparisonTool,
     demo_capture: Option<crate::demo_capture::DemoCapture>,
+    pending_download_pick: Option<PendingDownloadPick>,
+    download_in_progress: bool,
 }
 
 impl CopernicusViewer {
@@ -103,6 +120,8 @@ impl CopernicusViewer {
             open_product_dialog: OpenProductDialog::new(),
             comparison: ComparisonTool::default(),
             demo_capture: crate::demo_capture::DemoCapture::from_env(),
+            pending_download_pick: None,
+            download_in_progress: false,
         };
 
         for location in initial_locations {
@@ -469,6 +488,83 @@ impl CopernicusViewer {
         self.close_product(index);
     }
 
+    fn can_download_product(&self, store_index: usize) -> bool {
+        self.stores
+            .get(store_index)
+            .is_some_and(|store| is_s3_product(&store.root_path))
+    }
+
+    fn can_download_selected_product(&self) -> bool {
+        !self.download_in_progress
+            && self
+                .selected
+                .as_ref()
+                .is_some_and(|sel| self.can_download_product(sel.store_index))
+    }
+
+    fn request_product_download(&mut self, store_index: usize) {
+        if self.download_in_progress {
+            self.status_message = "Download already in progress".to_string();
+            return;
+        }
+        if !self.can_download_product(store_index) {
+            self.status_message = "Product is not on S3 storage".to_string();
+            return;
+        }
+        self.pending_download_pick = Some(PendingDownloadPick { store_index });
+    }
+
+    fn start_download(&mut self, store_index: usize, dest_parent: PathBuf) {
+        let Some(store) = self.stores.get(store_index) else {
+            return;
+        };
+        let root_path = store.root_path.clone();
+        let (bucket, prefix) = match parse_s3_location(&root_path) {
+            Ok(location) => location,
+            Err(err) => {
+                self.status_message = format!("Download failed: {err}");
+                return;
+            }
+        };
+
+        self.download_in_progress = true;
+        self.status_message = format!("Downloading {root_path}…");
+
+        let tx = self.load_tx.clone();
+        let (progress_tx, progress_rx) = mpsc::channel();
+
+        let progress_forward_tx = tx.clone();
+        thread::spawn(move || {
+            while let Ok((objects_done, bytes_done, current_key)) = progress_rx.recv() {
+                let _ = progress_forward_tx.send(LoadMessage::DownloadProgress {
+                    _store_index: store_index,
+                    objects_done,
+                    bytes_done,
+                    current_key,
+                });
+            }
+        });
+
+        let progress_tx_for_callback = progress_tx.clone();
+        let progress: DownloadProgressCallback = Arc::new(move |update| {
+            let _ = progress_tx_for_callback.send((
+                update.objects_done,
+                update.bytes_done,
+                update.current_key,
+            ));
+        });
+
+        thread::spawn(move || {
+            let result = download_s3_product(&bucket, &prefix, &dest_parent, Some(progress))
+                .map_err(|err| err.to_string());
+            drop(progress_tx);
+            let _ = tx.send(LoadMessage::DownloadReady {
+                _store_index: store_index,
+                result,
+            });
+        });
+    }
+
     fn select_node(&mut self, store_index: usize, node: &ZarrTreeNode) {
         self.selected = Some(SelectedNode {
             store_index,
@@ -645,6 +741,32 @@ impl CopernicusViewer {
                         Err(err) => self.plot_panel.set_error(err),
                     }
                 }
+                LoadMessage::DownloadProgress {
+                    objects_done,
+                    bytes_done,
+                    current_key,
+                    ..
+                } => {
+                    if !self.download_in_progress {
+                        continue;
+                    }
+                    let mib = bytes_done as f64 / (1024.0 * 1024.0);
+                    self.status_message = format!(
+                        "Downloading… {objects_done} objects ({mib:.1} MiB) — {current_key}"
+                    );
+                }
+                LoadMessage::DownloadReady { result, .. } => {
+                    self.download_in_progress = false;
+                    match result {
+                        Ok(path) => {
+                            self.status_message =
+                                format!("Downloaded to {}", path.display());
+                        }
+                        Err(err) => {
+                            self.status_message = format!("Download failed: {err}");
+                        }
+                    }
+                }
             }
         }
 
@@ -731,9 +853,11 @@ impl CopernicusViewer {
             .collect();
 
         let mut to_close: Option<usize> = None;
+        let mut to_download: Option<usize> = None;
 
         for (store_index, product_name) in products {
             let root = self.stores[store_index].tree.root.clone();
+            let is_s3 = is_s3_product(&self.stores[store_index].root_path);
             ui.horizontal(|ui| {
                 if ui
                     .small_button("✕")
@@ -743,12 +867,39 @@ impl CopernicusViewer {
                     to_close = Some(store_index);
                 }
 
+                if is_s3 {
+                    ui.add_enabled_ui(!self.download_in_progress, |ui| {
+                        if ui
+                            .small_button("⬇")
+                            .on_hover_text("Download product")
+                            .clicked()
+                        {
+                            to_download = Some(store_index);
+                        }
+                    });
+                }
+
                 let response = egui::CollapsingHeader::new(format!("📦 {product_name}"))
                     .id_salt(format!("product_{store_index}"))
                     .default_open(self.stores.len() <= 2)
                     .show(ui, |ui| {
                         self.tree_ui(ui, store_index, &root);
                     });
+
+                response.header_response.context_menu(|ui| {
+                    if is_s3 {
+                        ui.add_enabled_ui(!self.download_in_progress, |ui| {
+                            if ui.button("Download product…").clicked() {
+                                to_download = Some(store_index);
+                                ui.close();
+                            }
+                        });
+                    }
+                    if ui.button("Close product").clicked() {
+                        to_close = Some(store_index);
+                        ui.close();
+                    }
+                });
 
                 if response.header_response.double_clicked() {
                     self.select_node(store_index, &root);
@@ -758,6 +909,9 @@ impl CopernicusViewer {
 
         if let Some(store_index) = to_close {
             self.close_product(store_index);
+        }
+        if let Some(store_index) = to_download {
+            self.request_product_download(store_index);
         }
     }
 }
@@ -803,6 +957,14 @@ impl eframe::App for CopernicusViewer {
             }
         }
 
+        if let Some(pending) = self.pending_download_pick.take() {
+            if let Some(dest_parent) = crate::platform::pick_download_folder(frame) {
+                self.start_download(pending.store_index, dest_parent);
+            } else {
+                self.status_message = "Download cancelled".to_string();
+            }
+        }
+
         egui::Panel::top("menu").show_inside(ui, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("File", |ui| {
@@ -813,6 +975,14 @@ impl eframe::App for CopernicusViewer {
                     ui.add_enabled_ui(!self.stores.is_empty(), |ui| {
                         if ui.button("Close product").clicked() {
                             self.close_product_for_selection();
+                            ui.close();
+                        }
+                    });
+                    ui.add_enabled_ui(self.can_download_selected_product(), |ui| {
+                        if ui.button("Download product…").clicked() {
+                            if let Some(sel) = &self.selected {
+                                self.request_product_download(sel.store_index);
+                            }
                             ui.close();
                         }
                     });

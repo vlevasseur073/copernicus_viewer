@@ -6,12 +6,17 @@
 //! [`crate::comparison`].
 
 pub mod creds;
+pub mod download;
 pub mod error;
 pub mod location;
 pub mod runtime;
 pub mod store;
 pub mod tree;
 
+pub use download::{
+    download_s3_product, is_s3_product, parse_s3_location, DownloadProgress,
+    DownloadProgressCallback,
+};
 pub use location::{
     format_s3_uri, parent_prefix, parse_product_location, resolve_zarr_product_path,
     s3_config_path, ProductLocation,

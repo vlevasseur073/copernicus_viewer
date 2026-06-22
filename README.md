@@ -14,6 +14,7 @@ A Rust GUI application to explore and visualize [EOPF](https://cpm.pages.eopf.co
 - **CF flag variables** with `flag_meanings` and `flag_values` / `flag_masks` (bitmask plots per flag)
 - **Coverage map** in the inspector — adaptive Plate Carrée view (zooms to regional tiles, global view for wide footprints) with Natural Earth coastlines
 - **Product comparison** (**Tools → Comparison**) — compare a reference and a new product (structure, variable data, CF flags) with user-defined thresholds and a pass/fail report; same logic via the `compare_products` example
+- **S3 product download** — copy an open S3-hosted product to a local `.zarr` directory (**File → Download product…**, hierarchy **⬇** icon, or right-click on the product name)
 
 ## Quick start
 
@@ -172,6 +173,18 @@ endpoint = https://s3.example.com
 Nested paths are resolved to the Zarr product root automatically (same as local paths), e.g. `s3://bucket/path/product.zarr/measurements/lst` opens `s3://bucket/path/product.zarr`.
 
 `.zarr.zip` archives on S3 are not supported in this version.
+
+### Downloading S3 products
+
+When an S3 product is open, download it to your local filesystem as a `.zarr` directory:
+
+- **File → Download product…** (enabled when the selected product is on S3)
+- **⬇** next to the product name in the **Hierarchy** panel
+- Right-click the product name → **Download product…**
+
+Choose a parent folder in the native dialog; the product is saved as `<folder>/<product-name>.zarr` with the same Zarr layout as on S3. Progress appears in the status bar. The download fails if that destination folder already exists.
+
+The library API [`download_s3_product`](src/zarr/download.rs) is also available for scripts and automation.
 
 ## Releasing (maintainers)
 
