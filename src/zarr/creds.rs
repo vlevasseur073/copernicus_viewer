@@ -24,6 +24,27 @@ pub struct S3Config {
 /// S3 client scoped to a bucket prefix (re-exported alias for zarrs-object-store).
 pub type PrefixedS3 = zarrs_object_store::object_store::prefix::PrefixStore<AmazonS3>;
 
+/// One bucket section in `s3.conf` (section name equals the S3 bucket name).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct S3BucketEntry {
+    pub bucket: String,
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    pub region: String,
+    pub endpoint: String,
+}
+
+impl S3BucketEntry {
+    pub fn to_s3_config(&self) -> S3Config {
+        S3Config {
+            access_key_id: self.access_key_id.clone(),
+            secret_access_key: self.secret_access_key.clone(),
+            region: self.region.clone(),
+            endpoint: self.endpoint.clone(),
+        }
+    }
+}
+
 impl S3Config {
     /// Resolve S3 credentials following the priority chain:
     ///
@@ -132,6 +153,54 @@ impl S3Config {
         Ok(buckets)
     }
 
+    /// Path used for the default `s3.conf` on this platform.
+    pub fn default_s3_config_path() -> Option<PathBuf> {
+        default_config_path()
+    }
+
+    /// Path to the S3 config file the app reads and writes: env override, else
+    /// [`default_s3_config_path`].
+    pub fn effective_s3_config_path() -> Option<PathBuf> {
+        explicit_config_path().or_else(default_config_path)
+    }
+
+    /// Load all bucket sections from an INI file. Returns an empty list when
+    /// the file does not exist.
+    pub fn load_bucket_entries(path: &Path) -> Result<Vec<S3BucketEntry>, IoError> {
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+
+        let content = std::fs::read_to_string(path).map_err(|e| {
+            IoError::S3Credentials(format!("cannot read S3 config {}: {e}", path.display()))
+        })?;
+
+        let mut entries = parse_ini_sections(&content)
+            .into_iter()
+            .map(|section| bucket_entry_from_section(&section, path))
+            .collect::<Result<Vec<_>, _>>()?;
+        entries.sort_by(|a, b| a.bucket.cmp(&b.bucket));
+        Ok(entries)
+    }
+
+    /// Write bucket sections to an INI file, creating parent directories as needed.
+    pub fn save_bucket_entries(path: &Path, entries: &[S3BucketEntry]) -> Result<(), IoError> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        let mut content = String::new();
+        for (index, entry) in entries.iter().enumerate() {
+            if index > 0 {
+                content.push('\n');
+            }
+            content.push_str(&format_bucket_entry(entry));
+        }
+
+        std::fs::write(path, content)?;
+        Ok(())
+    }
+
     fn bucket_names_from_ini_file(path: &Path) -> Result<Vec<String>, IoError> {
         let content = std::fs::read_to_string(path).map_err(|e| {
             IoError::S3Credentials(format!("cannot read S3 config {}: {e}", path.display()))
@@ -160,41 +229,7 @@ impl S3Config {
             None => return Ok(None),
         };
 
-        let access_key_id = section.get("access_key_id").ok_or_else(|| {
-            IoError::S3Credentials(format!(
-                "missing 'access_key_id' in [{}] of {}",
-                section.name,
-                path.display()
-            ))
-        })?;
-        let secret_access_key = section.get("secret_access_key").ok_or_else(|| {
-            IoError::S3Credentials(format!(
-                "missing 'secret_access_key' in [{}] of {}",
-                section.name,
-                path.display()
-            ))
-        })?;
-        let region = section.get("region").ok_or_else(|| {
-            IoError::S3Credentials(format!(
-                "missing 'region' in [{}] of {}",
-                section.name,
-                path.display()
-            ))
-        })?;
-        let endpoint = section.get("endpoint").ok_or_else(|| {
-            IoError::S3Credentials(format!(
-                "missing 'endpoint' in [{}] of {}",
-                section.name,
-                path.display()
-            ))
-        })?;
-
-        Ok(Some(Self {
-            access_key_id: access_key_id.to_string(),
-            secret_access_key: secret_access_key.to_string(),
-            region: region.to_string(),
-            endpoint: endpoint.to_string(),
-        }))
+        Ok(Some(config_from_section(section, path)?))
     }
 
     fn from_env_prefix(ak_var: &str, sk_var: &str, ep_var: &str, rg_var: &str) -> Option<Self> {
@@ -236,6 +271,24 @@ fn default_config_hint() -> &'static str {
     #[cfg(not(windows))]
     {
         "~/.config/cp-rs/s3.conf"
+    }
+}
+
+fn explicit_config_path() -> Option<PathBuf> {
+    for var in ["COPERNICUS_VIEWER_S3_CONFIG", "S3_CONFIG"] {
+        if let Ok(path) = env::var(var)
+            && !path.is_empty()
+        {
+            return Some(PathBuf::from(path));
+        }
+    }
+    None
+}
+
+/// Drop cached S3 clients so credential changes take effect immediately.
+pub fn clear_s3_client_cache() {
+    if let Some(cache) = S3_CLIENT_CACHE.get() {
+        cache.lock().expect("S3 client cache lock poisoned").clear();
     }
 }
 
@@ -317,6 +370,67 @@ fn parse_ini_sections(content: &str) -> Vec<IniSection> {
     }
 
     sections
+}
+
+fn config_from_section(section: &IniSection, path: &Path) -> Result<S3Config, IoError> {
+    let access_key_id = section.get("access_key_id").ok_or_else(|| {
+        IoError::S3Credentials(format!(
+            "missing 'access_key_id' in [{}] of {}",
+            section.name,
+            path.display()
+        ))
+    })?;
+    let secret_access_key = section.get("secret_access_key").ok_or_else(|| {
+        IoError::S3Credentials(format!(
+            "missing 'secret_access_key' in [{}] of {}",
+            section.name,
+            path.display()
+        ))
+    })?;
+    let region = section.get("region").ok_or_else(|| {
+        IoError::S3Credentials(format!(
+            "missing 'region' in [{}] of {}",
+            section.name,
+            path.display()
+        ))
+    })?;
+    let endpoint = section.get("endpoint").ok_or_else(|| {
+        IoError::S3Credentials(format!(
+            "missing 'endpoint' in [{}] of {}",
+            section.name,
+            path.display()
+        ))
+    })?;
+
+    Ok(S3Config {
+        access_key_id: access_key_id.to_string(),
+        secret_access_key: secret_access_key.to_string(),
+        region: region.to_string(),
+        endpoint: endpoint.to_string(),
+    })
+}
+
+fn bucket_entry_from_section(section: &IniSection, path: &Path) -> Result<S3BucketEntry, IoError> {
+    let config = config_from_section(section, path)?;
+    Ok(S3BucketEntry {
+        bucket: section.name.clone(),
+        access_key_id: config.access_key_id,
+        secret_access_key: config.secret_access_key,
+        region: config.region,
+        endpoint: config.endpoint,
+    })
+}
+
+fn format_bucket_entry(entry: &S3BucketEntry) -> String {
+    format!(
+        "[{}]\n\
+         type = s3\n\
+         access_key_id = {}\n\
+         secret_access_key = {}\n\
+         region = {}\n\
+         endpoint = {}",
+        entry.bucket, entry.access_key_id, entry.secret_access_key, entry.region, entry.endpoint,
+    )
 }
 
 #[cfg(test)]
@@ -418,5 +532,31 @@ mod tests {
 
         let result = S3Config::from_ini_file(tmp.path(), "unknown-bucket").unwrap();
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn save_and_load_bucket_entries_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("s3.conf");
+        let entries = vec![
+            S3BucketEntry {
+                bucket: "bucket-a".to_string(),
+                access_key_id: "AK_A".to_string(),
+                secret_access_key: "SK_A".to_string(),
+                region: "eu-west-1".to_string(),
+                endpoint: "https://s3.a.example.com".to_string(),
+            },
+            S3BucketEntry {
+                bucket: "bucket-b".to_string(),
+                access_key_id: "AK_B".to_string(),
+                secret_access_key: "SK_B".to_string(),
+                region: "us-east-1".to_string(),
+                endpoint: "https://s3.b.example.com".to_string(),
+            },
+        ];
+
+        S3Config::save_bucket_entries(&path, &entries).unwrap();
+        let loaded = S3Config::load_bucket_entries(&path).unwrap();
+        assert_eq!(loaded, entries);
     }
 }

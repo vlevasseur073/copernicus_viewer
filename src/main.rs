@@ -8,6 +8,7 @@ mod demo_capture;
 mod file_browser;
 mod platform;
 mod s3_browser;
+mod s3_config_dialog;
 
 fn main() -> eframe::Result<()> {
     platform::init();

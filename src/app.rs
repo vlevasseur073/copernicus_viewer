@@ -99,6 +99,7 @@ pub struct CopernicusViewer {
     pending_native_open: Option<PendingNativeOpen>,
     open_product_dialog: OpenProductDialog,
     comparison: ComparisonTool,
+    s3_config: crate::s3_config_dialog::S3ConfigDialog,
     demo_capture: Option<crate::demo_capture::DemoCapture>,
     pending_download_pick: Option<PendingDownloadPick>,
     download_in_progress: bool,
@@ -120,6 +121,7 @@ impl CopernicusViewer {
             pending_native_open: None,
             open_product_dialog: OpenProductDialog::new(),
             comparison: ComparisonTool::default(),
+            s3_config: crate::s3_config_dialog::S3ConfigDialog::default(),
             demo_capture: crate::demo_capture::DemoCapture::from_env(),
             pending_download_pick: None,
             download_in_progress: false,
@@ -130,6 +132,21 @@ impl CopernicusViewer {
         }
 
         app
+    }
+
+    fn show_s3_config_dialog(&mut self) {
+        self.s3_config.show();
+    }
+
+    fn on_s3_config_saved(&mut self) {
+        self.status_message = "S3 configuration saved.".to_string();
+        if matches!(
+            self.open_product_dialog.browser_location,
+            crate::file_browser::BrowserLocation::S3Root
+        ) && self.open_product_dialog.show
+        {
+            self.request_browse_list();
+        }
     }
 
     fn show_open_product_dialog(&mut self) {
@@ -309,7 +326,7 @@ impl CopernicusViewer {
                                 self.open_product_dialog.browser_location,
                                 crate::file_browser::BrowserLocation::S3Root
                             ) {
-                                "No buckets in s3.conf — add [bucket-name] sections \
+                                "No buckets in s3.conf — use File → Configure S3… \
                                  or type s3://bucket/path above."
                             } else if is_s3 {
                                 "No child prefixes here."
@@ -968,6 +985,10 @@ impl eframe::App for CopernicusViewer {
                         self.show_open_product_dialog();
                         ui.close();
                     }
+                    if ui.button("Configure S3…").clicked() {
+                        self.show_s3_config_dialog();
+                        ui.close();
+                    }
                     ui.add_enabled_ui(!self.stores.is_empty(), |ui| {
                         if ui.button("Close product").clicked() {
                             self.close_product_for_selection();
@@ -1044,5 +1065,9 @@ impl eframe::App for CopernicusViewer {
 
         self.open_product_dialog_ui(ui.ctx());
         self.comparison.ui(ui.ctx(), &self.stores);
+        self.s3_config.ui(ui.ctx());
+        if self.s3_config.take_saved() {
+            self.on_s3_config_saved();
+        }
     }
 }

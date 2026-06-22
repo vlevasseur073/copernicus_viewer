@@ -13,6 +13,9 @@ pub mod runtime;
 pub mod store;
 pub mod tree;
 
+pub use creds::{
+    PrefixedS3, S3BucketEntry, S3Config, clear_s3_client_cache, get_or_create_s3_client,
+};
 pub use download::{
     DownloadProgress, DownloadProgressCallback, download_s3_product, is_s3_product,
     parse_s3_location,

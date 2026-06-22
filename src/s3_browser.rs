@@ -114,6 +114,24 @@ fn join_prefix(base: &str, child: &str) -> String {
     }
 }
 
+/// Verify that credentials for `entry` can list the bucket root.
+pub fn test_bucket_connection(
+    entry: &copernicus_viewer::zarr::S3BucketEntry,
+) -> Result<(), String> {
+    let bucket = entry.bucket.trim().to_string();
+    let config = entry.to_s3_config();
+    shared_runtime().block_on(async move {
+        let store = config
+            .build_s3_client(&bucket)
+            .map_err(|e: IoError| e.to_string())?;
+        store
+            .list_with_delimiter(Some(&ObjectPath::from("")))
+            .await
+            .map_err(|e| format!("failed to list s3://{bucket}/: {e}"))?;
+        Ok(())
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
