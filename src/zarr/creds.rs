@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::env;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use tracing::debug;
 
@@ -28,7 +28,8 @@ impl S3Config {
     /// Resolve S3 credentials following the priority chain:
     ///
     /// 1. Explicit config file path
-    /// 2. Default config at `~/.config/cp-rs/s3.conf`
+    /// 2. Default config at `%APPDATA%\cp-rs\s3.conf` (Windows) or
+    ///    `~/.config/cp-rs/s3.conf` (Unix)
     /// 3. `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` / `S3_ENDPOINT` / `S3_REGION`
     /// 4. `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_ENDPOINT_URL` / `AWS_REGION`
     ///
@@ -43,17 +44,12 @@ impl S3Config {
             return Ok(cfg);
         }
 
-        if let Ok(home) = env::var("HOME") {
-            let default_path = Path::new(&home)
-                .join(".config")
-                .join("cp-rs")
-                .join("s3.conf");
-            if default_path.exists()
-                && let Some(cfg) = Self::from_ini_file(&default_path, bucket)?
-            {
-                debug!("resolved S3 credentials from default config file: {default_path:?}");
-                return Ok(cfg);
-            }
+        if let Some(default_path) = default_config_path()
+            && default_path.exists()
+            && let Some(cfg) = Self::from_ini_file(&default_path, bucket)?
+        {
+            debug!("resolved S3 credentials from default config file: {default_path:?}");
+            return Ok(cfg);
         }
 
         if let Some(cfg) = Self::from_env_prefix(
@@ -76,12 +72,12 @@ impl S3Config {
             return Ok(cfg);
         }
 
-        Err(IoError::S3Credentials(
+        Err(IoError::S3Credentials(format!(
             "no S3 credentials found \
-             place a config at ~/.config/cp-rs/s3.conf, \
-             or set S3_*/AWS_* environment variables"
-                .into(),
-        ))
+                 place a config at {}, \
+                 or set S3_*/AWS_* environment variables",
+            default_config_hint()
+        )))
     }
 
     /// Build a bare `AmazonS3` client from these credentials.
@@ -121,17 +117,13 @@ impl S3Config {
             buckets.extend(Self::bucket_names_from_ini_file(path)?);
         }
 
-        if let Ok(home) = env::var("HOME") {
-            let default_path = Path::new(&home)
-                .join(".config")
-                .join("cp-rs")
-                .join("s3.conf");
-            if default_path.exists() {
-                let from_default = Self::bucket_names_from_ini_file(&default_path)?;
-                for name in from_default {
-                    if !buckets.iter().any(|b| b == &name) {
-                        buckets.push(name);
-                    }
+        if let Some(default_path) = default_config_path()
+            && default_path.exists()
+        {
+            let from_default = Self::bucket_names_from_ini_file(&default_path)?;
+            for name in from_default {
+                if !buckets.iter().any(|b| b == &name) {
+                    buckets.push(name);
                 }
             }
         }
@@ -219,6 +211,34 @@ impl S3Config {
     }
 }
 
+/// Default location for `s3.conf` when no explicit path is provided.
+fn default_config_path() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        env::var_os("APPDATA").map(|appdata| Path::new(&appdata).join("cp-rs").join("s3.conf"))
+    }
+    #[cfg(not(windows))]
+    {
+        env::var_os("HOME").map(|home| {
+            Path::new(&home)
+                .join(".config")
+                .join("cp-rs")
+                .join("s3.conf")
+        })
+    }
+}
+
+fn default_config_hint() -> &'static str {
+    #[cfg(windows)]
+    {
+        "%APPDATA%\\cp-rs\\s3.conf"
+    }
+    #[cfg(not(windows))]
+    {
+        "~/.config/cp-rs/s3.conf"
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Per-bucket S3 client cache
 // ---------------------------------------------------------------------------
@@ -303,6 +323,28 @@ fn parse_ini_sections(content: &str) -> Vec<IniSection> {
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[test]
+    fn default_config_path_follows_platform_convention() {
+        #[cfg(windows)]
+        {
+            let appdata = env::var_os("APPDATA").expect("APPDATA must be set");
+            let path = default_config_path().expect("default config path");
+            assert_eq!(path, Path::new(&appdata).join("cp-rs").join("s3.conf"));
+        }
+        #[cfg(not(windows))]
+        {
+            let home = env::var_os("HOME").expect("HOME must be set");
+            let path = default_config_path().expect("default config path");
+            assert_eq!(
+                path,
+                Path::new(&home)
+                    .join(".config")
+                    .join("cp-rs")
+                    .join("s3.conf")
+            );
+        }
+    }
 
     #[test]
     fn list_configured_buckets_reads_all_sections() {

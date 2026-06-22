@@ -175,7 +175,7 @@ Remote EOPF Zarr directory stores on AWS S3 (including custom endpoints) can be 
 Credentials are resolved in this order (bucket name from the URI selects the INI section):
 
 1. Config file from `COPERNICUS_VIEWER_S3_CONFIG` or `S3_CONFIG` (if set)
-2. Default config at `~/.config/cp-rs/s3.conf`
+2. Default config at `%APPDATA%\cp-rs\s3.conf` (Windows) or `~/.config/cp-rs/s3.conf` (Unix)
 3. `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_ENDPOINT`, `S3_REGION`
 4. `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL`, `AWS_REGION`
 
