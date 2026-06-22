@@ -1,5 +1,6 @@
 //! Lightweight viewer and inspector for [EOPF](https://cpm.pages.eopf.copernicus.eu/eopf-cpm/main/PSFD/index.html)
 //! Zarr products from the Copernicus ecosystem.
+#![allow(clippy::single_range_in_vec_init)]
 //!
 //! The library opens EOPF Zarr stores on the local filesystem or AWS S3, builds a
 //! hierarchy tree from consolidated metadata, and provides helpers for metadata

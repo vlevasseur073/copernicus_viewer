@@ -3,14 +3,14 @@
 use crate::zarr::ZarrStore;
 
 use super::data::{
-    compare_variable_data, format_variable_detail, global_relative_score, DataReport,
+    DataReport, compare_variable_data, format_variable_detail, global_relative_score,
 };
-use super::flags::{compare_flag_variables, global_flag_score as median_flag_score, FlagReport};
+use super::flags::{FlagReport, compare_flag_variables, global_flag_score as median_flag_score};
 use super::options::CompareOptions;
 use super::product_label;
 use super::structure::{
-    collect_data_variables, collect_flag_variables, compare_structure, StructureReport,
-    StructureStatus,
+    StructureReport, StructureStatus, collect_data_variables, collect_flag_variables,
+    compare_structure,
 };
 
 pub use super::options::CompareOptions as ComparisonOptions;
@@ -366,7 +366,7 @@ mod tests {
             result.summary
         );
         assert!(
-            result.data.variables.len() > 0,
+            !result.data.variables.is_empty(),
             "expected compared variables: {}",
             result.summary
         );

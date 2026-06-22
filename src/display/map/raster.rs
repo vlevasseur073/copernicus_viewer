@@ -1,7 +1,7 @@
 use egui::{Color32, ColorImage, Pos2, Rect};
 
 use super::land::land_rings;
-use super::render::{graticule_step, project, MapView, LAND, OCEAN};
+use super::render::{LAND, MapView, OCEAN, graticule_step, project};
 
 pub fn rasterize_basemap(view: MapView, width: usize, height: usize) -> ColorImage {
     let mut pixels = vec![OCEAN; width * height];

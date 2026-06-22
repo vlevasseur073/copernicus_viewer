@@ -1,4 +1,5 @@
 //! Generate a minimal EOPF-style Zarr product for local testing.
+#![allow(clippy::single_range_in_vec_init)]
 //!
 //! ```bash
 //! cargo run --example create_sample_zarr
@@ -8,8 +9,8 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use zarrs::array::data_type::{float32, uint8};
 use zarrs::array::ArrayBuilder;
+use zarrs::array::data_type::{float32, uint8};
 use zarrs::filesystem::FilesystemStore;
 use zarrs::group::GroupBuilder;
 use zarrs::storage::ReadableWritableListableStorage;

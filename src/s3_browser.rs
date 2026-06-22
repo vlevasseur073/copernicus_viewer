@@ -2,12 +2,12 @@
 
 use crate::file_browser::BrowserItem;
 use copernicus_viewer::zarr::creds::S3Config;
+use copernicus_viewer::zarr::error::IoError;
 use copernicus_viewer::zarr::location::{format_s3_uri, s3_config_path};
 use copernicus_viewer::zarr::runtime::shared_runtime;
-use copernicus_viewer::zarr::error::IoError;
 
-use zarrs_object_store::object_store::path::Path as ObjectPath;
 use zarrs_object_store::object_store::ObjectStore;
+use zarrs_object_store::object_store::path::Path as ObjectPath;
 
 /// List browser entries for a local directory, S3 bucket root, or S3 prefix.
 pub fn list_browser_items(
@@ -38,10 +38,9 @@ fn list_configured_buckets() -> Result<Vec<BrowserItem>, String> {
         .collect();
 
     items.sort_by(|a, b| match (a, b) {
-        (
-            BrowserItem::Directory { name: a, .. },
-            BrowserItem::Directory { name: b, .. },
-        ) => a.cmp(b),
+        (BrowserItem::Directory { name: a, .. }, BrowserItem::Directory { name: b, .. }) => {
+            a.cmp(b)
+        }
         _ => std::cmp::Ordering::Equal,
     });
 

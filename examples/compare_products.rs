@@ -30,7 +30,7 @@
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use copernicus_viewer::comparison::{compare_products_with_options, ComparisonOptions};
+use copernicus_viewer::comparison::{ComparisonOptions, compare_products_with_options};
 use copernicus_viewer::zarr::open_store;
 
 fn main() -> ExitCode {

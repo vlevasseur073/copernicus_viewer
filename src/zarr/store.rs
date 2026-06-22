@@ -10,9 +10,9 @@ use zarrs_object_store::AsyncObjectStore;
 use zarrs_zip::ZipStorageAdapter;
 
 use super::creds::S3Config;
-use super::location::{parse_product_location, resolve_product_location, ProductLocation};
+use super::location::{ProductLocation, parse_product_location, resolve_product_location};
 use super::runtime::TokioBlockOn;
-use super::tree::{apply_root_metadata, build_tree, ZarrTree};
+use super::tree::{ZarrTree, apply_root_metadata, build_tree};
 
 pub use super::location::resolve_zarr_product_path;
 
@@ -92,8 +92,8 @@ fn create_local_storage(path: &Path) -> Result<ReadableListableStorage> {
 
 fn create_s3_storage(bucket: &str, prefix: &str) -> Result<ReadableListableStorage> {
     let config_path = s3_config_path();
-    let config = S3Config::resolve(bucket, config_path.as_deref())
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let config =
+        S3Config::resolve(bucket, config_path.as_deref()).map_err(|e| anyhow::anyhow!("{e}"))?;
     let prefixed = config
         .build_prefixed_s3_client(bucket, prefix)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -104,10 +104,10 @@ fn create_s3_storage(bucket: &str, prefix: &str) -> Result<ReadableListableStora
 
 fn s3_config_path() -> Option<PathBuf> {
     for var in ["COPERNICUS_VIEWER_S3_CONFIG", "S3_CONFIG"] {
-        if let Ok(path) = std::env::var(var) {
-            if !path.is_empty() {
-                return Some(PathBuf::from(path));
-            }
+        if let Ok(path) = std::env::var(var)
+            && !path.is_empty()
+        {
+            return Some(PathBuf::from(path));
         }
     }
     None

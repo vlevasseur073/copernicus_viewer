@@ -1,0 +1,18 @@
+# Install: pip install pre-commit && pre-commit install
+# Manual run: pre-commit run --all-files
+
+repos:
+  - repo: local
+    hooks:
+      - id: rustfmt
+        name: cargo fmt
+        entry: cargo fmt --all --
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: clippy
+        name: cargo clippy
+        entry: cargo clippy --locked --all-targets -- -D warnings
+        language: system
+        pass_filenames: false

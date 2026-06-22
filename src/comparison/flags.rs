@@ -1,7 +1,7 @@
 use anyhow::Result;
 use ndarray::ArrayD;
 
-use crate::plot::flags::{parse_cf_flags, CfFlagMode, CfFlags};
+use crate::plot::flags::{CfFlagMode, CfFlags, parse_cf_flags};
 use crate::zarr::{ZarrNodeKind, ZarrStore};
 
 use super::array_io::for_each_aligned_chunk;

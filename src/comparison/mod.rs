@@ -19,7 +19,7 @@ use eframe::egui;
 use crate::zarr::ZarrStore;
 
 pub use compare::{
-    compare_products, compare_products_with_options, ComparisonOptions, ComparisonResult,
+    ComparisonOptions, ComparisonResult, compare_products, compare_products_with_options,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]

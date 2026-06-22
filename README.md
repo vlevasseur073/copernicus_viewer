@@ -132,7 +132,27 @@ Verify downloads with the `SHA256SUMS.txt` file attached to each release.
 ```bash
 # Optional: generate a local sample product for testing
 cargo run --example create_sample_zarr
+```
 
+### Formatting and linting
+
+```bash
+cargo fmt --all
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked
+```
+
+CI runs `cargo fmt --check`, Clippy (`-D warnings`), and tests on every push and pull request.
+
+Optional [pre-commit](https://pre-commit.com) hooks run `cargo fmt` and Clippy before each commit:
+
+```bash
+pip install pre-commit   # or: brew install pre-commit
+pre-commit install
+pre-commit run --all-files   # verify without committing
+```
+
+```bash
 # Compare two products from the CLI (reference vs new)
 cargo run --example compare_products -- reference.zarr new.zarr
 
@@ -189,10 +209,26 @@ The library API [`download_s3_product`](src/zarr/download.rs) is also available 
 ## Releasing (maintainers)
 
 1. Bump `version` in `Cargo.toml` and commit.
-2. Create and push an annotated tag: `git tag -a v0.1.0 -m "v0.1.0" && git push origin v0.1.0`
+2. Create and push an annotated tag: `git tag -a v0.2.0 -m "v0.2.0" && git push origin v0.2.0`
 3. Ensure the repository secret `CARGO_REGISTRY_TOKEN` is set ([crates.io token](https://crates.io/settings/tokens)).
 
-The [release workflow](.github/workflows/release.yml) runs tests, builds binaries for Linux, Windows, and macOS (x86_64 + arm64), attaches them to a GitHub Release, and publishes to crates.io (requires the `CARGO_REGISTRY_TOKEN` repository secret).
+The [release workflow](.github/workflows/release.yml) runs tests, builds binaries for Linux, Windows, and macOS (x86_64 + arm64), attaches them to a GitHub Release, publishes to crates.io, and updates [`CHANGELOG.md`](CHANGELOG.md) from git history using [git-cliff](https://git-cliff.org).
+
+Preview unreleased changes locally (set `GITHUB_TOKEN` for PR metadata from the GitHub API):
+
+```bash
+cargo install git-cliff --locked
+export GITHUB_TOKEN=ghp_...   # optional; `gh auth token` works too
+git cliff --config cliff.toml --unreleased
+```
+
+To include linked issues in the changelog, reference them in commit or PR descriptions (`Fixes #123`, `Closes #456`, or `#789`). git-cliff does not query the GitHub Issues API for all closed issues in a release — only PR metadata (via the API) and issue numbers mentioned in commit text (via `link_parsers` in [`cliff.toml`](cliff.toml)).
+
+Regenerate the full changelog:
+
+```bash
+git cliff --config cliff.toml --output CHANGELOG.md
+```
 
 For the **first** crates.io publish, create an API token at [crates.io/settings/tokens](https://crates.io/settings/tokens), add it as a GitHub secret, then either push a tag or run locally:
 

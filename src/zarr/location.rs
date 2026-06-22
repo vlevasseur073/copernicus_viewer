@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use zarrs_object_store::object_store::ObjectStoreExt;
 use zarrs_object_store::object_store::path::Path as ObjectPath;
 
@@ -137,10 +137,10 @@ pub fn parent_prefix(prefix: &str) -> Option<String> {
 /// Path to an explicit S3 config file from `COPERNICUS_VIEWER_S3_CONFIG` or `S3_CONFIG`.
 pub fn s3_config_path() -> Option<PathBuf> {
     for var in ["COPERNICUS_VIEWER_S3_CONFIG", "S3_CONFIG"] {
-        if let Ok(path) = std::env::var(var) {
-            if !path.is_empty() {
-                return Some(PathBuf::from(path));
-            }
+        if let Ok(path) = std::env::var(var)
+            && !path.is_empty()
+        {
+            return Some(PathBuf::from(path));
         }
     }
     None
@@ -200,8 +200,8 @@ mod tests {
 
     #[test]
     fn parses_s3_uri_with_prefix() {
-        let loc = parse_product_location("s3://my-bucket/eopf/products/S03.zarr/measurements")
-            .unwrap();
+        let loc =
+            parse_product_location("s3://my-bucket/eopf/products/S03.zarr/measurements").unwrap();
         assert_eq!(
             loc,
             ProductLocation::S3 {
@@ -257,10 +257,7 @@ mod tests {
 
     #[test]
     fn parent_prefix_walks_up() {
-        assert_eq!(
-            parent_prefix("a/b/c.zarr"),
-            Some("a/b".to_string())
-        );
+        assert_eq!(parent_prefix("a/b/c.zarr"), Some("a/b".to_string()));
         assert_eq!(parent_prefix("product.zarr"), Some(String::new()));
         assert_eq!(parent_prefix(""), None);
     }
@@ -274,10 +271,9 @@ mod tests {
     #[test]
     fn resolves_local_nested_path() {
         let root = PathBuf::from("/data/product.zarr");
-        let resolved = resolve_product_location(ProductLocation::Local(
-            root.join("measurements/image"),
-        ))
-        .unwrap();
+        let resolved =
+            resolve_product_location(ProductLocation::Local(root.join("measurements/image")))
+                .unwrap();
         assert_eq!(resolved.canonical_id, root.display().to_string());
         assert_eq!(resolved.location, ProductLocation::Local(root));
     }

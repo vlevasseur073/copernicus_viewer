@@ -135,32 +135,31 @@ fn footprint_from_stac_item(
         .get("extent")
         .and_then(|extent| extent.get("spatial"))
         .and_then(|spatial| spatial.get("bbox"))
+        && let Some(bbox) = parse_bbox_value(value)
     {
-        if let Some(bbox) = parse_bbox_value(value) {
-            let crs = item
-                .get("extent")
-                .and_then(|extent| extent.get("spatial"))
-                .and_then(|spatial| spatial.get("crs"))
-                .and_then(|v| v.as_str())
-                .map(str::to_string);
-            return Some(ProductFootprint {
-                bbox: normalize_bbox(bbox),
-                crs,
-                polygon,
-                product_id,
-            });
-        }
+        let crs = item
+            .get("extent")
+            .and_then(|extent| extent.get("spatial"))
+            .and_then(|spatial| spatial.get("crs"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        return Some(ProductFootprint {
+            bbox: normalize_bbox(bbox),
+            crs,
+            polygon,
+            product_id,
+        });
     }
 
-    if let Some(geometry) = item.get("geometry") {
-        if let Some((bbox, geometry_polygon)) = parse_geometry(geometry) {
-            return Some(ProductFootprint {
-                bbox: normalize_bbox(bbox),
-                crs: Some("EPSG:4326".to_string()),
-                polygon: geometry_polygon,
-                product_id,
-            });
-        }
+    if let Some(geometry) = item.get("geometry")
+        && let Some((bbox, geometry_polygon)) = parse_geometry(geometry)
+    {
+        return Some(ProductFootprint {
+            bbox: normalize_bbox(bbox),
+            crs: Some("EPSG:4326".to_string()),
+            polygon: geometry_polygon,
+            product_id,
+        });
     }
 
     None
@@ -254,11 +253,7 @@ fn parse_ring(values: &[Value]) -> Option<Vec<[f64; 2]>> {
         }
         ring.push([json_number(&coords[0])?, json_number(&coords[1])?]);
     }
-    if ring.len() < 3 {
-        None
-    } else {
-        Some(ring)
-    }
+    if ring.len() < 3 { None } else { Some(ring) }
 }
 
 fn bbox_from_ring(ring: &[[f64; 2]]) -> [f64; 4] {
