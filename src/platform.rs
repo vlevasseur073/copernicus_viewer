@@ -303,3 +303,17 @@ pub fn pick_zarr_product(frame: &eframe::Frame, kind: ZarrNativePick) -> Option<
 pub fn pick_zarr_product(_frame: &eframe::Frame, _kind: ZarrNativePick) -> Option<PathBuf> {
     None
 }
+
+/// Folder picker for the parent directory of a downloaded S3 product. Must run on the main/UI thread.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn pick_download_folder(frame: &eframe::Frame) -> Option<PathBuf> {
+    rfd::FileDialog::new()
+        .set_title("Choose download folder")
+        .set_parent(frame)
+        .pick_folder()
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn pick_download_folder(_frame: &eframe::Frame) -> Option<PathBuf> {
+    None
+}

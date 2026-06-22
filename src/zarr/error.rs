@@ -17,6 +17,10 @@ pub enum IoError {
     #[error("S3 client error: {0}")]
     S3Client(String),
 
+    /// Failed to download an S3 product to the local filesystem.
+    #[error("S3 download error: {0}")]
+    S3Download(String),
+
     /// Zarr store-level read or traversal failure.
     #[error("Zarr store error: {0}")]
     ZarrStore(String),

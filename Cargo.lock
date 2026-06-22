@@ -853,6 +853,7 @@ dependencies = [
  "egui",
  "egui_plot",
  "env_logger",
+ "futures",
  "image",
  "log",
  "ndarray",
