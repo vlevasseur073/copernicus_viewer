@@ -14,12 +14,12 @@ pub mod store;
 pub mod tree;
 
 pub use download::{
-    download_s3_product, is_s3_product, parse_s3_location, DownloadProgress,
-    DownloadProgressCallback,
+    DownloadProgress, DownloadProgressCallback, download_s3_product, is_s3_product,
+    parse_s3_location,
 };
 pub use location::{
-    format_s3_uri, parent_prefix, parse_product_location, resolve_zarr_product_path,
-    s3_config_path, ProductLocation,
+    ProductLocation, format_s3_uri, parent_prefix, parse_product_location,
+    resolve_zarr_product_path, s3_config_path,
 };
-pub use store::{open_store, ZarrStore};
+pub use store::{ZarrStore, open_store};
 pub use tree::{ZarrNodeKind, ZarrTreeNode};

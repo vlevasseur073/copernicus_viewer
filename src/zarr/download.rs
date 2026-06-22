@@ -8,7 +8,9 @@ use zarrs_object_store::object_store::{ObjectStore, ObjectStoreExt};
 
 use super::creds::S3Config;
 use super::error::IoError;
-use super::location::{parse_product_location, resolve_product_location, s3_config_path, ProductLocation};
+use super::location::{
+    ProductLocation, parse_product_location, resolve_product_location, s3_config_path,
+};
 use super::runtime::shared_runtime;
 
 const DOWNLOAD_CONCURRENCY: usize = 8;
@@ -35,8 +37,7 @@ pub fn is_s3_product(root_path: &str) -> bool {
 /// Parse bucket and prefix from a canonical `s3://` product root path.
 pub fn parse_s3_location(root_path: &str) -> Result<(String, String), IoError> {
     let loc = parse_product_location(root_path).map_err(|e| IoError::S3Download(e.to_string()))?;
-    let resolved =
-        resolve_product_location(loc).map_err(|e| IoError::S3Download(e.to_string()))?;
+    let resolved = resolve_product_location(loc).map_err(|e| IoError::S3Download(e.to_string()))?;
     match resolved.location {
         ProductLocation::S3 { bucket, prefix } => Ok((bucket, prefix)),
         ProductLocation::Local(_) => Err(IoError::S3Download("not an S3 product".into())),
@@ -94,9 +95,9 @@ async fn download_s3_product_async(
     let mut objects = Vec::new();
     let mut list_stream = store.list(None);
     while let Some(item) = list_stream.next().await {
-        objects.push(
-            item.map_err(|e| IoError::S3Download(format!("failed to list s3://{bucket}/{prefix}: {e}")))?,
-        );
+        objects.push(item.map_err(|e| {
+            IoError::S3Download(format!("failed to list s3://{bucket}/{prefix}: {e}"))
+        })?);
     }
 
     let counters = Arc::new(Mutex::new((0usize, 0u64)));
@@ -156,7 +157,10 @@ mod tests {
             product_folder_name("eopf/products/S03OLCEFR_202309.zarr").unwrap(),
             "S03OLCEFR_202309.zarr"
         );
-        assert_eq!(product_folder_name("product.zarr/").unwrap(), "product.zarr");
+        assert_eq!(
+            product_folder_name("product.zarr/").unwrap(),
+            "product.zarr"
+        );
     }
 
     #[test]
@@ -187,7 +191,8 @@ mod tests {
         let uri = std::env::var("S3_TEST_URI").expect("S3_TEST_URI not set");
         let (bucket, prefix) = parse_s3_location(&uri).expect("parse");
         let dest_parent = tempfile::tempdir().expect("tempdir");
-        let dest = download_s3_product(&bucket, &prefix, dest_parent.path(), None).expect("download");
+        let dest =
+            download_s3_product(&bucket, &prefix, dest_parent.path(), None).expect("download");
         assert!(dest.join(".zgroup").exists() || dest.join(".zmetadata").exists());
     }
 }

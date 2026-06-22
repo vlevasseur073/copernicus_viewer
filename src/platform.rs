@@ -39,7 +39,7 @@ impl GpuProfile {
             }
             // Expert override: force wgpu even on WSL (may fail with EGL/ZINK).
             Ok("native") | Ok("wgpu") => Self::Native,
-            Ok("auto") | Err(_) | _ => {
+            _ => {
                 if is_wsl() {
                     if use_wayland() {
                         Self::WslGpu
@@ -267,7 +267,7 @@ fn force_env(key: &str, value: &str) {
 /// Which native picker to use for an EOPF Zarr product.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ZarrNativePick {
-/// Native folder picker for `.zarr` directories.
+    /// Native folder picker for `.zarr` directories.
     Directory,
     /// Native file picker for `.zarr.zip` archives.
     ZipArchive,

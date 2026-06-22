@@ -1,8 +1,8 @@
-use copernicus_viewer::display::{parse_root_attributes, AttributeNode, InspectorView};
+use copernicus_viewer::display::{AttributeNode, InspectorView, parse_root_attributes};
 use copernicus_viewer::plot::{
-    load_plot_data, parse_cf_flags, FlagSelection, PlotData, PlotRequest,
+    FlagSelection, PlotData, PlotRequest, load_plot_data, parse_cf_flags,
 };
-use copernicus_viewer::zarr::{open_store, ZarrNodeKind};
+use copernicus_viewer::zarr::{ZarrNodeKind, open_store};
 
 #[test]
 fn opens_sample_product_and_loads_plot() {

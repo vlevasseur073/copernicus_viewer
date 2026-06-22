@@ -2,7 +2,9 @@
 
 use std::path::{Path, PathBuf};
 
-use copernicus_viewer::zarr::{format_s3_uri, parent_prefix, parse_product_location, ProductLocation};
+use copernicus_viewer::zarr::{
+    ProductLocation, format_s3_uri, parent_prefix, parse_product_location,
+};
 
 /// Current browse location in the open-product dialog.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -109,19 +111,18 @@ impl BrowserLocation {
 /// Initial browse location from a typed path hint and optional last-opened product root.
 pub fn initial_browser_location(path_hint: &str, store_root: Option<&Path>) -> BrowserLocation {
     let trimmed = path_hint.trim();
-    if trimmed.starts_with("s3://") {
-        if let Some(loc) = initial_s3_browser_location(trimmed) {
-            return loc;
-        }
+    if trimmed.starts_with("s3://")
+        && let Some(loc) = initial_s3_browser_location(trimmed)
+    {
+        return loc;
     }
 
-    if let Some(root) = store_root {
-        if let Some(s) = root.to_str()
-            && s.starts_with("s3://")
-            && let Some(loc) = initial_s3_browser_location(s)
-        {
-            return loc;
-        }
+    if let Some(root) = store_root
+        && let Some(s) = root.to_str()
+        && s.starts_with("s3://")
+        && let Some(loc) = initial_s3_browser_location(s)
+    {
+        return loc;
     }
 
     BrowserLocation::Local(initial_browser_dir(path_hint, store_root))
@@ -152,19 +153,17 @@ pub fn initial_browser_dir(path_hint: &str, store_root: Option<&Path>) -> PathBu
             if is_zarr_product_dir(
                 root.file_name().and_then(|n| n.to_str()).unwrap_or(""),
                 root,
-            ) {
-                if let Some(parent) = root.parent() {
-                    if parent.is_dir() {
-                        return parent.to_path_buf();
-                    }
-                }
+            ) && let Some(parent) = root.parent()
+                && parent.is_dir()
+            {
+                return parent.to_path_buf();
             }
             return root.to_path_buf();
         }
-        if let Some(parent) = root.parent() {
-            if parent.is_dir() {
-                return parent.to_path_buf();
-            }
+        if let Some(parent) = root.parent()
+            && parent.is_dir()
+        {
+            return parent.to_path_buf();
         }
     }
 
@@ -175,19 +174,17 @@ pub fn initial_browser_dir(path_hint: &str, store_root: Option<&Path>) -> PathBu
             if is_zarr_product_dir(
                 path.file_name().and_then(|n| n.to_str()).unwrap_or(""),
                 &path,
-            ) {
-                if let Some(parent) = path.parent() {
-                    if parent.is_dir() {
-                        return parent.to_path_buf();
-                    }
-                }
+            ) && let Some(parent) = path.parent()
+                && parent.is_dir()
+            {
+                return parent.to_path_buf();
             }
             return path;
         }
-        if let Some(parent) = path.parent() {
-            if parent.is_dir() {
-                return parent.to_path_buf();
-            }
+        if let Some(parent) = path.parent()
+            && parent.is_dir()
+        {
+            return parent.to_path_buf();
         }
     }
 
@@ -305,7 +302,10 @@ mod tests {
     #[test]
     fn from_path_hint_parses_local_path() {
         let loc = BrowserLocation::from_path_hint("/data/product.zarr").unwrap();
-        assert_eq!(loc, BrowserLocation::Local(PathBuf::from("/data/product.zarr")));
+        assert_eq!(
+            loc,
+            BrowserLocation::Local(PathBuf::from("/data/product.zarr"))
+        );
     }
 
     #[test]
@@ -334,10 +334,7 @@ mod tests {
 
     #[test]
     fn initial_s3_location_uses_parent_of_zarr_product() {
-        let loc = initial_browser_location(
-            "s3://bucket/eopf/product.zarr",
-            None,
-        );
+        let loc = initial_browser_location("s3://bucket/eopf/product.zarr", None);
         assert_eq!(
             loc,
             BrowserLocation::S3 {

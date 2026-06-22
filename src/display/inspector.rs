@@ -1,6 +1,6 @@
-use crate::display::footprint::{parse_product_footprint, ProductFootprint};
+use crate::display::footprint::{ProductFootprint, parse_product_footprint};
 use crate::display::map::render_footprint_map;
-use crate::display::stac::{render_attribute_tree, AttributeNode};
+use crate::display::stac::{AttributeNode, render_attribute_tree};
 use crate::display::stats::{ArrayPreview, ArrayStatistics};
 use crate::display::{format_node_repr, parse_root_attributes};
 use crate::zarr::{ZarrNodeKind, ZarrTreeNode};

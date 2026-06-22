@@ -6,9 +6,9 @@ use zarrs::array::Array;
 use zarrs::array::ArraySubset;
 use zarrs::storage::ReadableListableStorage;
 
-use crate::display::stats::{build_preview, compute_statistics, ArrayPreview, ArrayStatistics};
-use crate::plot::flags::{apply_flag_selection, parse_cf_flags, CfFlags, FlagSelection};
-use crate::plot::georef::{resolve_georef, GeorefInfo};
+use crate::display::stats::{ArrayPreview, ArrayStatistics, build_preview, compute_statistics};
+use crate::plot::flags::{CfFlags, FlagSelection, apply_flag_selection, parse_cf_flags};
+use crate::plot::georef::{GeorefInfo, resolve_georef};
 use crate::zarr::{ZarrNodeKind, ZarrTreeNode};
 
 /// Parameters for loading and plotting a Zarr array subset.

@@ -2,8 +2,8 @@ use egui::{Color32, ColorImage, TextureHandle, TextureOptions};
 use egui_plot::{Line, Plot, PlotPoints};
 use serde_json::Map;
 
-use super::flags::{parse_cf_flags, CfFlags, FlagSelection};
-use super::georef::{axis_label, extent_description, GeorefInfo};
+use super::flags::{CfFlags, FlagSelection, parse_cf_flags};
+use super::georef::{GeorefInfo, axis_label, extent_description};
 use super::{PlotData, PlotLoadResult, PlotRequest};
 
 /// Plot panel state: slice controls, async loading, heatmap texture, and flag selector.
@@ -137,26 +137,24 @@ impl PlotPanel {
 
         let mut request_reload = false;
 
-        if let Some(changed) = self.slice_controls(ui) {
-            if changed {
-                request_reload = true;
-            }
+        if let Some(changed) = self.slice_controls(ui)
+            && changed
+        {
+            request_reload = true;
         }
 
-        if let Some(changed) = self.flag_controls(ui) {
-            if changed {
-                request_reload = true;
-            }
+        if let Some(changed) = self.flag_controls(ui)
+            && changed
+        {
+            request_reload = true;
         }
 
-        if request_reload {
-            if let Some(path) = self.array_path.clone() {
-                self.pending_request = Some(self.build_request(&path));
-                self.status = "Loading…".to_string();
-                self.texture = None;
-                self.texture_key = None;
-                self.load_progress = Some((0.0, "Starting…".to_string()));
-            }
+        if request_reload && let Some(path) = self.array_path.clone() {
+            self.pending_request = Some(self.build_request(&path));
+            self.status = "Loading…".to_string();
+            self.texture = None;
+            self.texture_key = None;
+            self.load_progress = Some((0.0, "Starting…".to_string()));
         }
 
         if let Some((fraction, message)) = &self.load_progress {

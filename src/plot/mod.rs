@@ -5,10 +5,10 @@ pub mod georef;
 pub mod loader;
 pub mod panel;
 
-pub use flags::{parse_cf_flags, CfFlagMode, CfFlags, FlagSelection};
-pub use georef::{axis_label, extent_description, GeorefInfo};
+pub use flags::{CfFlagMode, CfFlags, FlagSelection, parse_cf_flags};
+pub use georef::{GeorefInfo, axis_label, extent_description};
 pub use loader::{
-    load_plot_data, mutex_progress, shared_progress, PlotData, PlotLoadResult, PlotRequest,
-    ProgressCallback,
+    PlotData, PlotLoadResult, PlotRequest, ProgressCallback, load_plot_data, mutex_progress,
+    shared_progress,
 };
 pub use panel::PlotPanel;

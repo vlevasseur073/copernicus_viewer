@@ -1,18 +1,19 @@
 //! Main egui application: hierarchy browser, inspector, plot panel, and comparison tool.
+#![allow(clippy::large_enum_variant)]
 
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
 use eframe::egui;
 
 use copernicus_viewer::comparison::ComparisonTool;
-use copernicus_viewer::display::{render_inspector, InspectorView};
-use copernicus_viewer::plot::{load_plot_data, shared_progress, PlotLoadResult, PlotPanel};
+use copernicus_viewer::display::{InspectorView, render_inspector};
+use copernicus_viewer::plot::{PlotLoadResult, PlotPanel, load_plot_data, shared_progress};
 use copernicus_viewer::zarr::{
-    download_s3_product, is_s3_product, open_store, parse_s3_location, resolve_zarr_product_path,
-    DownloadProgressCallback, ZarrNodeKind, ZarrStore, ZarrTreeNode,
+    DownloadProgressCallback, ZarrNodeKind, ZarrStore, ZarrTreeNode, download_s3_product,
+    is_s3_product, open_store, parse_s3_location, resolve_zarr_product_path,
 };
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct SelectedNode {
@@ -136,15 +137,14 @@ impl CopernicusViewer {
         let store_root = last_root
             .filter(|root| !root.starts_with("s3://"))
             .map(PathBuf::from);
-        self.open_product_dialog.browser_location =
-            crate::file_browser::initial_browser_location(
-                &self.open_product_dialog.path,
-                store_root.as_deref(),
-            );
-        if self.open_product_dialog.path.is_empty() {
-            if let Some(root) = last_root {
-                self.open_product_dialog.path = root.to_string();
-            }
+        self.open_product_dialog.browser_location = crate::file_browser::initial_browser_location(
+            &self.open_product_dialog.path,
+            store_root.as_deref(),
+        );
+        if self.open_product_dialog.path.is_empty()
+            && let Some(root) = last_root
+        {
+            self.open_product_dialog.path = root.to_string();
         }
         self.open_product_dialog.browse_items = None;
         self.open_product_dialog.show = true;
@@ -241,12 +241,11 @@ impl CopernicusViewer {
                 ui.horizontal(|ui| {
                     let can_go_up = self.open_product_dialog.browser_location.can_go_up();
                     ui.add_enabled_ui(can_go_up, |ui| {
-                        if ui.button("⬆ Up").clicked() {
-                            if let Some(parent) = self.open_product_dialog.browser_location.go_up()
+                        if ui.button("⬆ Up").clicked()
+                            && let Some(parent) = self.open_product_dialog.browser_location.go_up()
                             {
                                 navigate_to = Some(parent);
                             }
-                        }
                     });
 
                     if ui.button("🏠 Home").clicked() {
@@ -415,10 +414,10 @@ impl CopernicusViewer {
 
     fn product_name(store: &ZarrStore) -> String {
         let root = &store.root_path;
-        if let Some(rest) = root.strip_prefix("s3://") {
-            if let Some(name) = rest.rsplit('/').next().filter(|s| !s.is_empty()) {
-                return name.to_string();
-            }
+        if let Some(rest) = root.strip_prefix("s3://")
+            && let Some(name) = rest.rsplit('/').next().filter(|s| !s.is_empty())
+        {
+            return name.to_string();
         }
         PathBuf::from(root)
             .file_name()
@@ -439,13 +438,13 @@ impl CopernicusViewer {
             .as_ref()
             .is_some_and(|sel| sel.store_index == store_index);
 
-        if let Some(sel) = &self.selected {
-            if sel.store_index > store_index {
-                self.selected = Some(SelectedNode {
-                    store_index: sel.store_index - 1,
-                    path: sel.path.clone(),
-                });
-            }
+        if let Some(sel) = &self.selected
+            && sel.store_index > store_index
+        {
+            self.selected = Some(SelectedNode {
+                store_index: sel.store_index - 1,
+                path: sel.path.clone(),
+            });
         }
 
         if let Some((idx, path)) = self.pending_plot.clone() {
@@ -691,8 +690,7 @@ impl CopernicusViewer {
                             .iter()
                             .any(|existing| existing.root_path == store.root_path)
                         {
-                            self.status_message =
-                                format!("Already open: {}", store.root_path);
+                            self.status_message = format!("Already open: {}", store.root_path);
                             continue;
                         }
                         let is_first = self.stores.is_empty();
@@ -709,8 +707,7 @@ impl CopernicusViewer {
                         }
                     }
                     Err(err) => {
-                        self.status_message =
-                            format!("Failed to open {location}: {err}");
+                        self.status_message = format!("Failed to open {location}: {err}");
                     }
                 },
                 LoadMessage::PlotProgress {
@@ -759,8 +756,7 @@ impl CopernicusViewer {
                     self.download_in_progress = false;
                     match result {
                         Ok(path) => {
-                            self.status_message =
-                                format!("Downloaded to {}", path.display());
+                            self.status_message = format!("Downloaded to {}", path.display());
                         }
                         Err(err) => {
                             self.status_message = format!("Download failed: {err}");
