@@ -8,7 +8,7 @@ use std::thread;
 
 use eframe::egui;
 
-use copernicus_viewer::comparison::ComparisonTool;
+use copernicus_viewer::comparison::{ComparisonTool, compare_products_with_options, ComparisonResult};
 use copernicus_viewer::display::{InspectorView, render_inspector};
 use copernicus_viewer::plot::{PlotLoadResult, PlotPanel, load_plot_data, shared_progress};
 use copernicus_viewer::zarr::{
@@ -83,6 +83,9 @@ enum LoadMessage {
     DownloadReady {
         _store_index: usize,
         result: Result<PathBuf, String>,
+    },
+    ComparisonReady {
+        result: ComparisonResult,
     },
 }
 
@@ -780,6 +783,17 @@ impl CopernicusViewer {
                         }
                     }
                 }
+                LoadMessage::ComparisonReady { result } => {
+                    // Comparison worker finished: show the report in the comparison tool
+                    self.comparison.set_result(result);
+                    if let Some(r) = &self.comparison.result() {
+                        self.status_message = if r.success {
+                            "Comparison finished: PASSED".to_string()
+                        } else {
+                            "Comparison finished: FAILED".to_string()
+                        };
+                    }
+                }
             }
         }
 
@@ -1065,6 +1079,26 @@ impl eframe::App for CopernicusViewer {
 
         self.open_product_dialog_ui(ui.ctx());
         self.comparison.ui(ui.ctx(), &self.stores);
+
+        // If the comparison UI requested a run, start it in a background thread
+        // so the UI thread is not blocked by the potentially long comparison.
+        if let Some((left_idx, right_idx, options, _verbose)) = self.comparison.take_pending_run() {
+            if left_idx < self.stores.len() && right_idx < self.stores.len() && left_idx != right_idx {
+                let left_store = self.stores[left_idx].clone();
+                let right_store = self.stores[right_idx].clone();
+                let tx = self.load_tx.clone();
+                // mark running so the comparison UI can disable controls
+                self.comparison.start_running();
+                self.status_message = format!("Comparing {} vs {}…", Self::product_name(&left_store), Self::product_name(&right_store));
+                thread::spawn(move || {
+                    let result = compare_products_with_options(left_store.as_ref(), right_store.as_ref(), &options);
+                    let _ = tx.send(LoadMessage::ComparisonReady { result });
+                });
+            } else {
+                self.status_message = "Comparison request invalid (products changed)".to_string();
+            }
+        }
+
         self.s3_config.ui(ui.ctx());
         if self.s3_config.take_saved() {
             self.on_s3_config_saved();

@@ -48,6 +48,11 @@ pub struct ComparisonTool {
     options: ComparisonOptions,
     verbose: bool,
     result: Option<ComparisonResult>,
+    /// Whether a compare run has been requested by the UI (not yet started by the
+    /// background worker).
+    pending_run: bool,
+    /// True while a background compare thread is running.
+    running: bool,
 }
 
 pub(crate) fn product_label(store: &ZarrStore) -> String {
@@ -66,16 +71,16 @@ impl ComparisonTool {
 
     /// Open the comparison window and immediately compare two open products by index.
     pub fn open_and_compare(&mut self, left: usize, right: usize, stores: &[Arc<ZarrStore>]) {
+        // Open the comparison window and request a background run. The actual
+        // work is performed by the application main loop which will detect the
+        // pending request and spawn a worker thread.
         self.open = true;
         self.left_index = left;
         self.right_index = right;
         self.clamp_indices(stores.len());
         if left < stores.len() && right < stores.len() && left != right {
-            self.result = Some(compare_products_with_options(
-                &stores[left],
-                &stores[right],
-                &self.options,
-            ));
+            self.result = None;
+            self.pending_run = true;
         }
     }
 
@@ -135,14 +140,17 @@ impl ComparisonTool {
                 Self::options_ui(ui, &mut self.options, &mut self.verbose);
 
                 ui.add_space(12.0);
-                ui.add_enabled_ui(!same_product, |ui| {
+                ui.add_enabled_ui(!same_product && !self.running, |ui| {
                     if ui.button("Compare").clicked() {
-                        let left = &stores[self.left_index];
-                        let right = &stores[self.right_index];
-                        self.result =
-                            Some(compare_products_with_options(left, right, &self.options));
+                        // Request a background comparison; do not block the UI.
+                        self.result = None;
+                        self.pending_run = true;
                     }
                 });
+                if self.running {
+                    ui.add_space(6.0);
+                    ui.label(egui::RichText::new("Comparing…").weak());
+                }
 
                 if let Some(result) = &self.result {
                     ui.add_space(12.0);
@@ -308,6 +316,40 @@ impl ComparisonTool {
         if store_count >= 2 && self.left_index == self.right_index {
             self.right_index = (self.left_index + 1) % store_count;
         }
+    }
+
+    /// Take any pending compare request previously triggered by the UI. Returns
+    /// (left_index, right_index, options, verbose) if a run was requested and
+    /// clears the pending flag.
+    pub fn take_pending_run(&mut self) -> Option<(usize, usize, ComparisonOptions, bool)> {
+        if self.pending_run {
+            self.pending_run = false;
+            // Clear any previous result when issuing a new run.
+            self.result = None;
+            return Some((self.left_index, self.right_index, self.options.clone(), self.verbose));
+        }
+        None
+    }
+
+    /// Mark the tool as running (a background worker has started the compare).
+    pub fn start_running(&mut self) {
+        self.running = true;
+    }
+
+    /// Store the comparison result and mark the tool as not running.
+    pub fn set_result(&mut self, result: ComparisonResult) {
+        self.result = Some(result);
+        self.running = false;
+    }
+
+    /// Return a reference to the last comparison result, if any.
+    pub fn result(&self) -> Option<&ComparisonResult> {
+        self.result.as_ref()
+    }
+
+    /// Mark the tool as not running any more (worker finished).
+    pub fn stop_running(&mut self) {
+        self.running = false;
     }
 }
 

@@ -32,7 +32,7 @@ dialog-gtk = ["rfd/gtk3"]
 
 [dependencies]
 anyhow = "1"
-eframe = { version = "0.34", default-features = false, features = ["default_fonts", "glow", "wgpu", "x11", "wayland"] }
+eframe = { version = "0.34", default-features = true, features = ["default_fonts", "glow", "wgpu", "x11", "wayland"] }
 egui = "0.34"
 egui_plot = "0.35"
 futures = "0.3"
