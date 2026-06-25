@@ -8,7 +8,9 @@ use std::thread;
 
 use eframe::egui;
 
-use copernicus_viewer::comparison::{ComparisonTool, compare_products_with_options, ComparisonResult};
+use copernicus_viewer::comparison::{
+    ComparisonResult, ComparisonTool, compare_products_with_options,
+};
 use copernicus_viewer::display::{InspectorView, render_inspector};
 use copernicus_viewer::plot::{PlotLoadResult, PlotPanel, load_plot_data, shared_progress};
 use copernicus_viewer::zarr::{
@@ -103,6 +105,7 @@ pub struct CopernicusViewer {
     open_product_dialog: OpenProductDialog,
     comparison: ComparisonTool,
     s3_config: crate::s3_config_dialog::S3ConfigDialog,
+    help: crate::help_dialog::HelpDialog,
     demo_capture: Option<crate::demo_capture::DemoCapture>,
     pending_download_pick: Option<PendingDownloadPick>,
     download_in_progress: bool,
@@ -125,6 +128,7 @@ impl CopernicusViewer {
             open_product_dialog: OpenProductDialog::new(),
             comparison: ComparisonTool::default(),
             s3_config: crate::s3_config_dialog::S3ConfigDialog::default(),
+            help: crate::help_dialog::HelpDialog::default(),
             demo_capture: crate::demo_capture::DemoCapture::from_env(),
             pending_download_pick: None,
             download_in_progress: false,
@@ -1027,6 +1031,12 @@ impl eframe::App for CopernicusViewer {
                         ui.close();
                     }
                 });
+                ui.menu_button("Help", |ui| {
+                    if ui.button("About Copernicus Viewer…").clicked() {
+                        self.help.show();
+                        ui.close();
+                    }
+                });
             });
         });
 
@@ -1083,15 +1093,26 @@ impl eframe::App for CopernicusViewer {
         // If the comparison UI requested a run, start it in a background thread
         // so the UI thread is not blocked by the potentially long comparison.
         if let Some((left_idx, right_idx, options, _verbose)) = self.comparison.take_pending_run() {
-            if left_idx < self.stores.len() && right_idx < self.stores.len() && left_idx != right_idx {
+            if left_idx < self.stores.len()
+                && right_idx < self.stores.len()
+                && left_idx != right_idx
+            {
                 let left_store = self.stores[left_idx].clone();
                 let right_store = self.stores[right_idx].clone();
                 let tx = self.load_tx.clone();
                 // mark running so the comparison UI can disable controls
                 self.comparison.start_running();
-                self.status_message = format!("Comparing {} vs {}…", Self::product_name(&left_store), Self::product_name(&right_store));
+                self.status_message = format!(
+                    "Comparing {} vs {}…",
+                    Self::product_name(&left_store),
+                    Self::product_name(&right_store)
+                );
                 thread::spawn(move || {
-                    let result = compare_products_with_options(left_store.as_ref(), right_store.as_ref(), &options);
+                    let result = compare_products_with_options(
+                        left_store.as_ref(),
+                        right_store.as_ref(),
+                        &options,
+                    );
                     let _ = tx.send(LoadMessage::ComparisonReady { result });
                 });
             } else {
@@ -1103,5 +1124,7 @@ impl eframe::App for CopernicusViewer {
         if self.s3_config.take_saved() {
             self.on_s3_config_saved();
         }
+
+        self.help.ui(ui.ctx());
     }
 }

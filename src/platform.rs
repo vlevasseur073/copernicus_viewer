@@ -3,9 +3,10 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use eframe::egui::{self, IconData};
+use eframe::egui;
 
-const APP_ID: &str = "eu.copernicus.copernicus-viewer";
+use crate::branding;
+
 const WINDOW_TITLE: &str = "Copernicus Viewer — EOPF Zarr";
 
 /// OpenGL / GPU profile selected from the environment and host OS.
@@ -87,6 +88,7 @@ impl GpuProfile {
 /// - `auto` — WSLg: Glow+GPU, WSL X11: Glow+llvmpipe, else: wgpu
 pub fn init() {
     check_linux_windowing_deps();
+    branding::ensure_linux_desktop_integration();
 
     let profile = GpuProfile::detect();
 
@@ -135,11 +137,11 @@ pub fn native_options() -> eframe::NativeOptions {
         vsync: profile.vsync(),
         centered: true,
         viewport: egui::ViewportBuilder::default()
-            .with_app_id(APP_ID)
+            .with_app_id(branding::APP_ID)
             .with_title(WINDOW_TITLE)
             .with_inner_size([1280.0, 800.0])
             .with_min_inner_size([640.0, 480.0])
-            .with_icon(Arc::new(window_icon())),
+            .with_icon(Arc::new(branding::window_icon())),
         ..Default::default()
     }
 }
@@ -169,45 +171,6 @@ fn use_wayland() -> bool {
     env_nonempty("WAYLAND_DISPLAY")
         .or_else(|| env_nonempty("WAYLAND_SOCKET"))
         .is_some()
-}
-
-/// Simple teal-on-slate icon for the window and taskbar.
-fn window_icon() -> IconData {
-    const SIZE: u32 = 64;
-    let mut rgba = vec![0u8; (SIZE * SIZE * 4) as usize];
-    let center = (SIZE as f32 - 1.0) / 2.0;
-    let radius = SIZE as f32 * 0.34;
-
-    for y in 0..SIZE {
-        for x in 0..SIZE {
-            let i = ((y * SIZE + x) * 4) as usize;
-            let dx = x as f32 - center;
-            let dy = y as f32 - center;
-            let dist = (dx * dx + dy * dy).sqrt();
-
-            let (r, g, b) = if dist <= radius + 1.0 {
-                let t = ((radius + 1.0 - dist) / 1.0).clamp(0.0, 1.0);
-                (lerp_u8(30, 0, t), lerp_u8(34, 148, t), lerp_u8(40, 168, t))
-            } else {
-                (30, 34, 40)
-            };
-
-            rgba[i] = r;
-            rgba[i + 1] = g;
-            rgba[i + 2] = b;
-            rgba[i + 3] = 255;
-        }
-    }
-
-    IconData {
-        width: SIZE,
-        height: SIZE,
-        rgba,
-    }
-}
-
-fn lerp_u8(a: u8, b: u8, t: f32) -> u8 {
-    (a as f32 + (b as f32 - a as f32) * t).round() as u8
 }
 
 #[cfg(target_os = "linux")]

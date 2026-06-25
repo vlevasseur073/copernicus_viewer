@@ -4,8 +4,10 @@
 //! [`app::CopernicusViewer`] with optional product paths from the command line.
 
 mod app;
+mod branding;
 mod demo_capture;
 mod file_browser;
+mod help_dialog;
 mod platform;
 mod s3_browser;
 mod s3_config_dialog;

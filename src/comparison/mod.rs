@@ -326,7 +326,12 @@ impl ComparisonTool {
             self.pending_run = false;
             // Clear any previous result when issuing a new run.
             self.result = None;
-            return Some((self.left_index, self.right_index, self.options.clone(), self.verbose));
+            return Some((
+                self.left_index,
+                self.right_index,
+                self.options.clone(),
+                self.verbose,
+            ));
         }
         None
     }

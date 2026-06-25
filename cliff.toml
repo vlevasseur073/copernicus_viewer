@@ -71,6 +71,7 @@ commit_parsers = [
   { message = "^chore: update CHANGELOG", skip = true },
   { message = "^feature[: ]", group = "Features" },
   { message = "^Feature[: ]", group = "Features" },
+  { message = "^feat[.: ]", group = "Features" },
   { message = "^fix[: ]", group = "Bug Fixes" },
   { message = "^Fix[: ]", group = "Bug Fixes" },
   { message = "^Add ", group = "Added" },
