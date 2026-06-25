@@ -611,10 +611,14 @@ impl CopernicusViewer {
         self.inspector = inspector;
 
         if let ZarrNodeKind::Array {
-            shape, attributes, ..
+            shape,
+            attributes,
+            fill_value,
+            ..
         } = &node.kind
         {
-            self.plot_panel.select_array(&node.path, shape, attributes);
+            self.plot_panel
+                .select_array(&node.path, shape, attributes, fill_value.as_ref());
             self.pending_plot = Some((store_index, node.path.clone()));
             self.request_plot_load();
         } else {

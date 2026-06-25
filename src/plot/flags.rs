@@ -1,6 +1,8 @@
 use ndarray::ArrayD;
 use serde_json::{Map, Value};
 
+use super::cf_decode::{is_fill_value, resolve_fill_value};
+
 /// Which CF flag view to plot for a flag variable.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum FlagSelection {
@@ -62,7 +64,10 @@ impl CfFlags {
 }
 
 /// Parse CF `flag_meanings` with `flag_values` or `flag_masks` from array attributes.
-pub fn parse_cf_flags(attributes: &Map<String, Value>) -> Option<CfFlags> {
+pub fn parse_cf_flags(
+    attributes: &Map<String, Value>,
+    zarr_fill_value: Option<&Value>,
+) -> Option<CfFlags> {
     let meanings = parse_meanings(attributes)?;
     let (codes, mode) = parse_codes(attributes)?;
     if meanings.len() != codes.len() {
@@ -73,7 +78,7 @@ pub fn parse_cf_flags(attributes: &Map<String, Value>) -> Option<CfFlags> {
         meanings,
         codes,
         mode,
-        fill_value: parse_fill_value(attributes),
+        fill_value: resolve_fill_value(zarr_fill_value, attributes),
     })
 }
 
@@ -201,21 +206,6 @@ fn parse_json_number(value: &Value) -> Option<u64> {
     }
 }
 
-fn parse_fill_value(attributes: &Map<String, Value>) -> Option<f64> {
-    let value = attributes.get("_FillValue")?;
-    match value {
-        Value::Number(number) => number.as_f64(),
-        Value::String(text) => text.parse().ok(),
-        _ => None,
-    }
-}
-
-fn is_fill_value(value: f64, fill_value: Option<f64>) -> bool {
-    fill_value
-        .map(|fill| (value - fill).abs() <= 1e-9)
-        .unwrap_or(false)
-}
-
 fn values_equal(value: f64, code: u64) -> bool {
     (value - code as f64).abs() <= 1e-9
 }
@@ -244,7 +234,7 @@ mod tests {
         .unwrap()
         .clone();
 
-        let flags = parse_cf_flags(&attrs).expect("flags");
+        let flags = parse_cf_flags(&attrs, Some(&json!(255))).expect("flags");
         assert_eq!(flags.meanings.len(), 4);
         assert!(flags.uses_bitmasks());
         assert_eq!(flags.codes, vec![1, 2, 4, 8]);

@@ -93,10 +93,15 @@ fn loads_bitmask_flag_plot() {
         .find_by_path("/measurements/image/qa_flags")
         .expect("find qa_flags");
 
-    let ZarrNodeKind::Array { attributes, .. } = &node.kind else {
+    let ZarrNodeKind::Array {
+        attributes,
+        fill_value,
+        ..
+    } = &node.kind
+    else {
         panic!("qa_flags should be an array");
     };
-    let flags = parse_cf_flags(attributes).expect("cf flags");
+    let flags = parse_cf_flags(attributes, fill_value.as_ref()).expect("cf flags");
     assert!(flags.uses_bitmasks());
     assert_eq!(flags.meanings.len(), 4);
 
@@ -114,4 +119,36 @@ fn loads_bitmask_flag_plot() {
     assert!(binary);
     assert!(values.iter().any(|v| (*v - 1.0).abs() < f32::EPSILON));
     assert!(values.iter().any(|v| (*v - 0.0).abs() < f32::EPSILON));
+}
+
+#[test]
+fn loads_cf_decoded_plot() {
+    let path = std::path::Path::new("sample_data/S03OLCEFR_sample.zarr");
+    if !path.exists() {
+        eprintln!("sample data missing — run: cargo run --example create_sample_zarr");
+        return;
+    }
+
+    let store = open_store("sample_data/S03OLCEFR_sample.zarr").expect("open store");
+    let Some(node) = store.tree.root.find_by_path("/measurements/image/lst") else {
+        eprintln!("packed lst missing — run: cargo run --example create_sample_zarr");
+        return;
+    };
+
+    let request = PlotRequest {
+        array_path: "/measurements/image/lst".to_string(),
+        slice_indices: vec![],
+        flag_selection: FlagSelection::Raw,
+    };
+    let loaded = load_plot_data(&store.storage, &store.tree.root, &node.kind, &request, None)
+        .expect("load cf-decoded plot");
+
+    assert!(matches!(loaded.plot, PlotData::Heatmap { .. }));
+    assert!(loaded.stats.finite_count > 0);
+    assert!(loaded.stats.nan_count > 0);
+
+    let min = loaded.stats.min.expect("decoded min");
+    let max = loaded.stats.max.expect("decoded max");
+    assert!((min - 273.15).abs() < 1e-6, "min was {min}");
+    assert!((max - 275.15).abs() < 1e-6, "max was {max}");
 }

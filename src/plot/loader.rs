@@ -7,6 +7,7 @@ use zarrs::array::ArraySubset;
 use zarrs::storage::ReadableListableStorage;
 
 use crate::display::stats::{ArrayPreview, ArrayStatistics, build_preview, compute_statistics};
+use crate::plot::cf_decode::{apply_cf_decode, parse_cf_encoding};
 use crate::plot::flags::{CfFlags, FlagSelection, apply_flag_selection, parse_cf_flags};
 use crate::plot::georef::{GeorefInfo, resolve_georef};
 use crate::zarr::{ZarrNodeKind, ZarrTreeNode};
@@ -104,13 +105,14 @@ pub fn load_plot_data(
         shape,
         dtype,
         attributes,
+        fill_value,
         ..
     } = kind
     else {
         anyhow::bail!("only arrays can be plotted");
     };
 
-    let flags = parse_cf_flags(attributes);
+    let flags = parse_cf_flags(attributes, fill_value.as_ref());
 
     let array = Array::open(storage.clone(), &request.array_path)
         .with_context(|| format!("failed to open array at {}", request.array_path))?;
@@ -122,9 +124,14 @@ pub fn load_plot_data(
     report(0.35, "Reading array data…");
     let mut values = read_as_f64_array(&array, &array_subset, dtype)?;
 
+    let encoding = parse_cf_encoding(attributes, fill_value.as_ref());
+
     if let (Some(flags), FlagSelection::Flag(index)) = (&flags, request.flag_selection) {
         report(0.50, "Applying flag selection…");
         values = apply_flag_selection(&values, flags, index);
+    } else {
+        report(0.45, "Applying CF decoding…");
+        values = apply_cf_decode(&values, &encoding);
     }
 
     report(0.65, "Computing statistics…");

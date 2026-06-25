@@ -119,7 +119,7 @@ fn compare_one_flag_variable(
         return Ok(None);
     }
 
-    let Some(flags) = parse_cf_flags(attributes) else {
+    let Some(flags) = parse_cf_flags(attributes, None) else {
         return Ok(None);
     };
 

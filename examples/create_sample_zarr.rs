@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use zarrs::array::ArrayBuilder;
-use zarrs::array::data_type::{float32, uint8};
+use zarrs::array::data_type::{float32, uint8, uint16};
 use zarrs::filesystem::FilesystemStore;
 use zarrs::group::GroupBuilder;
 use zarrs::storage::ReadableWritableListableStorage;
@@ -126,6 +126,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     radiance.store_array_subset(&[0..64, 0..128], &data)?;
+
+    let lst = ArrayBuilder::new(vec![64, 128], vec![32, 32], uint16(), 65535u16)
+        .dimension_names(["y", "x"].into())
+        .attributes(
+            serde_json::json!({
+                "long_name": "Land surface temperature",
+                "units": "K",
+                "scale_factor": 0.01,
+                "add_offset": 273.15,
+                "_FillValue": 65535
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        )
+        .build(store.clone(), "/measurements/image/lst")?;
+    lst.store_metadata()?;
+
+    let mut lst_data = vec![65535u16; 64 * 128];
+    for row in 0..64 {
+        for col in 0..128 {
+            lst_data[row * 128 + col] = if (row + col) % 31 == 0 {
+                65535
+            } else if col % 17 == 0 {
+                0
+            } else if row % 23 == 0 {
+                200
+            } else {
+                100
+            };
+        }
+    }
+    lst.store_array_subset(&[0..64, 0..128], &lst_data)?;
 
     let qa_flags = ArrayBuilder::new(vec![64, 128], vec![32, 32], uint8(), 255u8)
         .dimension_names(["y", "x"].into())

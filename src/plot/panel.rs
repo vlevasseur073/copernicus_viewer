@@ -60,6 +60,7 @@ impl PlotPanel {
         path: &str,
         shape: &[u64],
         attributes: &Map<String, serde_json::Value>,
+        zarr_fill_value: Option<&serde_json::Value>,
     ) {
         self.array_path = Some(path.to_string());
         self.texture = None;
@@ -67,7 +68,7 @@ impl PlotPanel {
         self.color_bar_texture = None;
         self.plot_data = None;
         self.load_progress = Some((0.0, "Starting…".to_string()));
-        self.flags = parse_cf_flags(attributes);
+        self.flags = parse_cf_flags(attributes, zarr_fill_value);
         self.flag_selection = default_flag_selection(self.flags.as_ref());
 
         let extra_dims = shape.len().saturating_sub(2);

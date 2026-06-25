@@ -299,7 +299,7 @@ pub fn is_data_variable(node: &ZarrTreeNode) -> bool {
     if is_coordinate_variable(node) {
         return false;
     }
-    if parse_cf_flags(attributes).is_some() {
+    if parse_cf_flags(attributes, None).is_some() {
         return false;
     }
     if is_unsupported_dtype(dtype) {
@@ -332,7 +332,7 @@ pub fn is_flag_variable(node: &ZarrTreeNode) -> bool {
     if node.is_empty_array() {
         return false;
     }
-    parse_cf_flags(attributes).is_some()
+    parse_cf_flags(attributes, None).is_some()
 }
 
 /// Collect sorted hierarchy paths of measurement variables under `root`.
