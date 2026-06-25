@@ -1,10 +1,14 @@
-use egui::{Color32, ColorImage, TextureHandle, TextureOptions};
+use egui::{Color32, ColorImage, RichText, TextureHandle, TextureOptions};
 use egui_plot::{Line, Plot, PlotPoints};
 use serde_json::Map;
 
 use super::flags::{CfFlags, FlagSelection, parse_cf_flags};
 use super::georef::{GeorefInfo, axis_label, extent_description};
 use super::{PlotData, PlotLoadResult, PlotRequest};
+
+const COLOR_BAR_WIDTH_PX: f32 = 24.0;
+const COLOR_BAR_GUTTER: f32 = 72.0;
+const COLOR_BAR_TEXTURE_HEIGHT: usize = 256;
 
 /// Plot panel state: slice controls, async loading, heatmap texture, and flag selector.
 pub struct PlotPanel {
@@ -16,6 +20,7 @@ pub struct PlotPanel {
     plot_data: Option<PlotData>,
     texture: Option<TextureHandle>,
     texture_key: Option<String>,
+    color_bar_texture: Option<TextureHandle>,
     status: String,
     load_progress: Option<(f32, String)>,
 }
@@ -31,6 +36,7 @@ impl Default for PlotPanel {
             plot_data: None,
             texture: None,
             texture_key: None,
+            color_bar_texture: None,
             status: "Select a 2D variable in the hierarchy to display a heatmap.".to_string(),
             load_progress: None,
         }
@@ -58,6 +64,7 @@ impl PlotPanel {
         self.array_path = Some(path.to_string());
         self.texture = None;
         self.texture_key = None;
+        self.color_bar_texture = None;
         self.plot_data = None;
         self.load_progress = Some((0.0, "Starting…".to_string()));
         self.flags = parse_cf_flags(attributes);
@@ -111,6 +118,7 @@ impl PlotPanel {
     pub fn set_plot_data(&mut self, data: PlotData) {
         self.texture = None;
         self.texture_key = None;
+        self.color_bar_texture = None;
         self.plot_data = Some(data);
         self.status.clear();
         self.load_progress = None;
@@ -121,6 +129,7 @@ impl PlotPanel {
         self.plot_data = None;
         self.texture = None;
         self.texture_key = None;
+        self.color_bar_texture = None;
         self.status = message;
         self.load_progress = None;
     }
@@ -154,6 +163,7 @@ impl PlotPanel {
             self.status = "Loading…".to_string();
             self.texture = None;
             self.texture_key = None;
+            self.color_bar_texture = None;
             self.load_progress = Some((0.0, "Starting…".to_string()));
         }
 
@@ -358,19 +368,7 @@ impl PlotPanel {
         binary: bool,
     ) {
         ui.label(label);
-        ui.horizontal(|ui| {
-            if binary {
-                ui.label("off: 0");
-                ui.separator();
-                ui.label("on: 1");
-            } else {
-                ui.label(format!("min: {vmin:.4}"));
-                ui.separator();
-                ui.label(format!("max: {vmax:.4}"));
-            }
-            ui.separator();
-            ui.label(format!("{width} × {height_px} px"));
-        });
+        ui.label(format!("{width} × {height_px} px"));
 
         if let Some(info) = georef {
             let extent = extent_description(info);
@@ -406,14 +404,21 @@ impl PlotPanel {
                 image,
                 TextureOptions::LINEAR,
             );
+            let color_bar = ctx.load_texture(
+                format!("color_bar_{texture_key}"),
+                color_bar_image(binary),
+                TextureOptions::LINEAR,
+            );
             self.texture = Some(texture);
+            self.color_bar_texture = Some(color_bar);
             self.texture_key = Some(texture_key);
         }
 
-        if let Some(texture) = &self.texture {
+        if let (Some(texture), Some(color_bar_texture)) = (&self.texture, &self.color_bar_texture) {
             let avail_w = ui.available_width().max(1.0);
             let avail_h = height.max(120.0).max(1.0);
-            let available = egui::vec2(avail_w, avail_h);
+            let plot_avail_w = (avail_w - COLOR_BAR_GUTTER).max(1.0);
+            let available = egui::vec2(plot_avail_w, avail_h);
 
             if width == 0 || height_px == 0 {
                 ui.label("Empty array — nothing to display.");
@@ -429,11 +434,25 @@ impl PlotPanel {
             let w = w.clamp(1.0, 16_384.0);
             let h = h.clamp(1.0, 16_384.0);
 
+            let (top_label, bottom_label) = color_bar_labels(vmin, vmax, binary);
+            let bar_size = egui::vec2(COLOR_BAR_WIDTH_PX, h);
+
             ui.centered_and_justified(|ui| {
-                ui.add(
-                    egui::Image::from_texture((texture.id(), egui::vec2(w, h)))
-                        .fit_to_exact_size(egui::vec2(w, h)),
-                );
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::Image::from_texture((texture.id(), egui::vec2(w, h)))
+                            .fit_to_exact_size(egui::vec2(w, h)),
+                    );
+                    ui.add_space(8.0);
+                    ui.vertical(|ui| {
+                        ui.label(RichText::new(top_label).small().weak());
+                        ui.add(
+                            egui::Image::from_texture((color_bar_texture.id(), bar_size))
+                                .fit_to_exact_size(bar_size),
+                        );
+                        ui.label(RichText::new(bottom_label).small().weak());
+                    });
+                });
             });
         }
     }
@@ -444,6 +463,56 @@ fn default_flag_selection(flags: Option<&CfFlags>) -> FlagSelection {
         FlagSelection::Flag(0)
     } else {
         FlagSelection::Raw
+    }
+}
+
+fn color_bar_labels(vmin: f32, vmax: f32, binary: bool) -> (String, String) {
+    if binary {
+        ("1".to_string(), "0".to_string())
+    } else {
+        (format!("{vmax:.4}"), format!("{vmin:.4}"))
+    }
+}
+
+fn binary_off_color() -> Color32 {
+    Color32::from_gray(30)
+}
+
+fn binary_on_color() -> Color32 {
+    Color32::from_rgb(255, 204, 0)
+}
+
+fn nan_color() -> Color32 {
+    Color32::from_gray(40)
+}
+
+fn color_bar_image(binary: bool) -> ColorImage {
+    let width = COLOR_BAR_WIDTH_PX as usize;
+    let height = COLOR_BAR_TEXTURE_HEIGHT;
+    let mut pixels = Vec::with_capacity(width * height);
+
+    for row in 0..height {
+        let color = if binary {
+            if row < height / 2 {
+                binary_on_color()
+            } else {
+                binary_off_color()
+            }
+        } else {
+            let t = if height <= 1 {
+                1.0
+            } else {
+                1.0 - row as f32 / (height - 1) as f32
+            };
+            viridis_color(t)
+        };
+        pixels.extend(std::iter::repeat_n(color, width));
+    }
+
+    ColorImage {
+        size: [width, height],
+        pixels,
+        ..Default::default()
     }
 }
 
@@ -462,12 +531,12 @@ fn color_image_from_values(
         for col in 0..width {
             let v = values[row * width + col];
             let color = if !v.is_finite() {
-                Color32::from_gray(40)
+                nan_color()
             } else if binary {
                 if v >= 0.5 {
-                    Color32::from_rgb(255, 204, 0)
+                    binary_on_color()
                 } else {
-                    Color32::from_gray(30)
+                    binary_off_color()
                 }
             } else {
                 let t = ((v - vmin) / range).clamp(0.0, 1.0);

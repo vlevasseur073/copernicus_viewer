@@ -79,7 +79,7 @@ pub enum PlotData {
 /// Callback invoked during async plot loading with `(fraction, message)`.
 pub type ProgressCallback = Arc<dyn Fn(f32, &str) + Send + Sync>;
 
-const MAX_PLOT_PIXELS: usize = 512 * 512;
+const MAX_PLOT_PIXELS: usize = 4096 * 4096;
 
 /// Load array data for plotting and inspector statistics.
 ///
