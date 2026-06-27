@@ -19,7 +19,6 @@
   "LST_ancillary_ds.nc:biome_orphan": "/conditions/auxiliary/orphan/biome",
   "LST_ancillary_ds.nc:fraction": "/conditions/auxiliary/fraction",
   "LST_ancillary_ds.nc:fraction_orphan": "/conditions/auxiliary/orphan/fraction",
-  "LST_ancillary_ds.nc:validation": "/conditions/auxiliary/validation",
   "LST_in.nc:LST": "/measurements/lst",
   "LST_in.nc:LST_orphan": "/measurements/orphan/lst",
   "LST_in.nc:LST_uncertainty": "/quality/lst_uncertainty",

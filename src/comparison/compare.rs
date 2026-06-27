@@ -10,7 +10,7 @@ use super::options::CompareOptions;
 use super::product_label;
 use super::structure::{
     StructureReport, StructureStatus, collect_data_variables, collect_flag_variables,
-    compare_structure,
+    compare_structure, is_comparable_for_comparison,
 };
 
 pub use super::options::CompareOptions as ComparisonOptions;
@@ -26,7 +26,7 @@ pub struct ComparisonResult {
     pub summary: String,
     /// Overall pass when structure, data, and flags all succeed.
     pub success: bool,
-    /// Whether both products have the same hierarchy paths.
+    /// Whether the new product contains every comparable (non-coordinate) array from the reference.
     pub isomorphic: bool,
     /// `true` when fatal structure differences prevented data comparison.
     pub skip_data: bool,
@@ -76,7 +76,7 @@ fn compare_product_trees(
     let left_label = product_label(left);
     let right_label = product_label(right);
 
-    let isomorphic = left.tree().root.is_isomorphic_to(&right.tree().root);
+    let isomorphic = is_comparable_for_comparison(&left.tree().root, &right.tree().root);
     if !isomorphic {
         let result = ComparisonResult {
             reference_label: left_label,
@@ -171,7 +171,9 @@ fn format_summary(result: &ComparisonResult, verbose: bool) -> String {
     ];
 
     if !result.isomorphic {
-        lines.push("Products are not isomorphic.".to_string());
+        lines.push(
+            "Products are not comparable (reference arrays missing in new product).".to_string(),
+        );
         return lines.join("\n");
     }
 
@@ -357,6 +359,35 @@ mod tests {
 
         let left = open_product(ref_path.to_str().unwrap()).expect("open reference");
         let right = open_product(new_path.to_str().unwrap()).expect("open new");
+        let result = compare_products(&left, &right);
+
+        assert!(result.isomorphic, "{}", result.summary);
+        assert!(
+            !result.skip_data,
+            "data comparison should not be skipped: {}",
+            result.summary
+        );
+        assert!(
+            !result.data.variables.is_empty(),
+            "expected compared variables: {}",
+            result.summary
+        );
+    }
+
+    #[cfg(feature = "safe")]
+    #[test]
+    fn slstr_zarr_and_safe_products_are_comparable() {
+        let ref_path =
+            Path::new("/home/vincent/Data/SLSTR/S03SLSLST_20260622T102053_0180_A008_T96C.zarr");
+        let new_path = Path::new(
+            "/home/vincent/Data/SLSTR/S3A_SL_2_LST____20260622T102053_20260622T102353_20260622T123949_0179_141_008_2160_PS1_O_NR_005.SEN3",
+        );
+        if !ref_path.exists() || !new_path.exists() {
+            return;
+        }
+
+        let left = open_product(ref_path.to_str().unwrap()).expect("open zarr reference");
+        let right = open_product(new_path.to_str().unwrap()).expect("open safe new");
         let result = compare_products(&left, &right);
 
         assert!(result.isomorphic, "{}", result.summary);
