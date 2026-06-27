@@ -31,7 +31,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use copernicus_viewer::comparison::{ComparisonOptions, compare_products_with_options};
-use copernicus_viewer::zarr::open_store;
+use copernicus_viewer::product::open_product;
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -57,7 +57,7 @@ fn run(args: &[String]) -> Result<(), String> {
     let (reference, new, options, verbose) = parse_args(args)?;
 
     eprintln!("Opening reference: {}", reference.display());
-    let reference_store = open_store(
+    let reference_store = open_product(
         reference
             .to_str()
             .ok_or_else(|| format!("invalid reference path: {}", reference.display()))?,
@@ -65,7 +65,7 @@ fn run(args: &[String]) -> Result<(), String> {
     .map_err(|e| e.to_string())?;
 
     eprintln!("Opening new:       {}", new.display());
-    let new_store = open_store(
+    let new_store = open_product(
         new.to_str()
             .ok_or_else(|| format!("invalid new path: {}", new.display()))?,
     )

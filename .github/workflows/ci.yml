@@ -34,7 +34,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Install Linux GUI build dependencies
+      - name: Install Linux build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -45,13 +45,24 @@ jobs:
             libxinerama-dev \
             libxcursor-dev \
             libxi-dev \
-            pkg-config
+            pkg-config \
+            libnetcdf-dev \
+            cmake
 
-      - name: Clippy
-        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Clippy (Zarr-only)
+        run: cargo clippy --locked --all-targets --no-default-features --features dialog-portal -- -D warnings
 
-      - name: Run tests
-        run: cargo test --locked
+      - name: Clippy (SAFE, system NetCDF)
+        run: cargo clippy --locked --all-targets --features safe,dialog-portal -- -D warnings
+
+      - name: Test Zarr-only build
+        run: cargo test --locked --no-default-features --features dialog-portal
+
+      - name: Test SAFE with system NetCDF
+        run: cargo test --locked --features safe,dialog-portal
+
+      - name: Test SAFE with static NetCDF
+        run: cargo test --locked --no-default-features --features safe,dialog-portal,netcdf-static
 
       - name: Verify crates.io package
         run: cargo publish --dry-run --locked

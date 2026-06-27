@@ -2,7 +2,8 @@ use anyhow::Result;
 use ndarray::ArrayD;
 
 use crate::plot::flags::{CfFlagMode, CfFlags, parse_cf_flags};
-use crate::zarr::{ZarrNodeKind, ZarrStore};
+use crate::product::Product;
+use crate::zarr::ZarrNodeKind;
 
 use super::array_io::for_each_aligned_chunk;
 use super::options::CompareOptions;
@@ -62,8 +63,8 @@ impl FlagReport {
 
 /// Compare CF flag variables between two products bit-by-bit.
 pub fn compare_flag_variables(
-    left: &ZarrStore,
-    right: &ZarrStore,
+    left: &Product,
+    right: &Product,
     paths: &[String],
     options: &CompareOptions,
 ) -> FlagReport {
@@ -83,22 +84,21 @@ pub fn compare_flag_variables(
 }
 
 fn compare_one_flag_variable(
-    left: &ZarrStore,
-    right: &ZarrStore,
+    left: &Product,
+    right: &Product,
     path: &str,
     eps: f64,
 ) -> Result<Option<FlagVariableComparison>> {
-    let Some(left_node) = left.tree.root.find_by_path(path) else {
+    let Some(left_node) = left.tree().root.find_by_path(path) else {
         return Ok(None);
     };
-    let Some(right_node) = right.tree.root.find_by_path(path) else {
+    let Some(right_node) = right.tree().root.find_by_path(path) else {
         return Ok(None);
     };
 
     let ZarrNodeKind::Array {
         shape: ref_shape,
         chunks: ref_chunks,
-        dtype: ref_dtype,
         attributes,
         ..
     } = &left_node.kind
@@ -107,9 +107,7 @@ fn compare_one_flag_variable(
     };
 
     let ZarrNodeKind::Array {
-        shape: new_shape,
-        dtype: new_dtype,
-        ..
+        shape: new_shape, ..
     } = &right_node.kind
     else {
         return Ok(None);
@@ -127,13 +125,11 @@ fn compare_one_flag_variable(
     let mut chunks_compared = 0usize;
 
     for_each_aligned_chunk(
-        &left.storage,
-        &right.storage,
+        left,
+        right,
         path,
         ref_shape,
         ref_chunks,
-        ref_dtype,
-        new_dtype,
         |reference, new| {
             accumulator.ingest(reference, new, &flags);
             chunks_compared += 1;

@@ -2,7 +2,8 @@ use copernicus_viewer::display::{AttributeNode, InspectorView, parse_root_attrib
 use copernicus_viewer::plot::{
     FlagSelection, PlotData, PlotRequest, load_plot_data, parse_cf_flags,
 };
-use copernicus_viewer::zarr::{ZarrNodeKind, open_store};
+use copernicus_viewer::product::{Product, open_product};
+use copernicus_viewer::zarr::ZarrNodeKind;
 
 #[test]
 fn opens_sample_product_and_loads_plot() {
@@ -12,9 +13,9 @@ fn opens_sample_product_and_loads_plot() {
         return;
     }
 
-    let store = open_store("sample_data/S03OLCEFR_sample.zarr").expect("open store");
-    let node = store
-        .tree
+    let product = open_product("sample_data/S03OLCEFR_sample.zarr").expect("open store");
+    let node = product
+        .tree()
         .root
         .find_by_path("/measurements/image/oa01_radiance")
         .expect("find array");
@@ -24,7 +25,7 @@ fn opens_sample_product_and_loads_plot() {
         slice_indices: vec![],
         flag_selection: FlagSelection::Raw,
     };
-    let loaded = load_plot_data(&store.storage, &store.tree.root, &node.kind, &request, None)
+    let loaded = load_plot_data(&product, &product.tree().root, &node.kind, &request, None)
         .expect("load plot");
     assert!(matches!(loaded.plot, PlotData::Heatmap { .. }));
     assert!(loaded.stats.finite_count > 0);
@@ -42,8 +43,8 @@ fn parses_root_attribute_tree() {
         return;
     }
 
-    let store = open_store("sample_data/S03OLCEFR_sample.zarr").expect("open store");
-    let root = &store.tree.root;
+    let product = open_product("sample_data/S03OLCEFR_sample.zarr").expect("open store");
+    let root = &product.tree().root;
 
     let tree = parse_root_attributes(root, None).expect("root attrs");
     assert!(tree.iter().any(|node| matches!(
@@ -67,8 +68,8 @@ fn parses_product_footprint_from_sample() {
         return;
     }
 
-    let store = open_store("sample_data/S03OLCEFR_sample.zarr").expect("open store");
-    let root = &store.tree.root;
+    let product = open_product("sample_data/S03OLCEFR_sample.zarr").expect("open store");
+    let root = &product.tree().root;
     let ZarrNodeKind::Group { attributes, .. } = &root.kind else {
         panic!("root group");
     };
@@ -86,9 +87,9 @@ fn loads_bitmask_flag_plot() {
         return;
     }
 
-    let store = open_store("sample_data/S03OLCEFR_sample.zarr").expect("open store");
-    let node = store
-        .tree
+    let product = open_product("sample_data/S03OLCEFR_sample.zarr").expect("open store");
+    let node = product
+        .tree()
         .root
         .find_by_path("/measurements/image/qa_flags")
         .expect("find qa_flags");
@@ -110,7 +111,7 @@ fn loads_bitmask_flag_plot() {
         slice_indices: vec![],
         flag_selection: FlagSelection::Flag(2), // cloud bit
     };
-    let loaded = load_plot_data(&store.storage, &store.tree.root, &node.kind, &request, None)
+    let loaded = load_plot_data(&product, &product.tree().root, &node.kind, &request, None)
         .expect("load flag plot");
 
     let PlotData::Heatmap { binary, values, .. } = loaded.plot else {
@@ -129,8 +130,8 @@ fn loads_cf_decoded_plot() {
         return;
     }
 
-    let store = open_store("sample_data/S03OLCEFR_sample.zarr").expect("open store");
-    let Some(node) = store.tree.root.find_by_path("/measurements/image/lst") else {
+    let product = open_product("sample_data/S03OLCEFR_sample.zarr").expect("open store");
+    let Some(node) = product.tree().root.find_by_path("/measurements/image/lst") else {
         eprintln!("packed lst missing — run: cargo run --example create_sample_zarr");
         return;
     };
@@ -140,7 +141,7 @@ fn loads_cf_decoded_plot() {
         slice_indices: vec![],
         flag_selection: FlagSelection::Raw,
     };
-    let loaded = load_plot_data(&store.storage, &store.tree.root, &node.kind, &request, None)
+    let loaded = load_plot_data(&product, &product.tree().root, &node.kind, &request, None)
         .expect("load cf-decoded plot");
 
     assert!(matches!(loaded.plot, PlotData::Heatmap { .. }));
@@ -151,4 +152,39 @@ fn loads_cf_decoded_plot() {
     let max = loaded.stats.max.expect("decoded max");
     assert!((min - 273.15).abs() < 1e-6, "min was {min}");
     assert!((max - 275.15).abs() < 1e-6, "max was {max}");
+}
+
+#[cfg(feature = "safe")]
+#[test]
+fn opens_sl_lst_safe_when_present() {
+    let path = std::path::Path::new(
+        "/home/vincent/Data/SLSTR/S3A_SL_2_LST____20260622T102053_20260622T102353_20260622T123949_0179_141_008_2160_PS1_O_NR_005.SEN3",
+    );
+    if !path.exists() {
+        return;
+    }
+
+    let product = open_product(path.to_str().unwrap()).expect("open safe");
+    assert!(matches!(product, Product::Safe(_)));
+    assert!(
+        product
+            .tree()
+            .root
+            .find_by_path("/measurements/lst")
+            .is_some()
+    );
+
+    let node = product
+        .tree()
+        .root
+        .find_by_path("/measurements/lst")
+        .unwrap();
+    let request = PlotRequest {
+        array_path: "/measurements/lst".to_string(),
+        slice_indices: vec![],
+        flag_selection: FlagSelection::Raw,
+    };
+    let loaded = load_plot_data(&product, &product.tree().root, &node.kind, &request, None)
+        .expect("plot lst from safe");
+    assert!(matches!(loaded.plot, PlotData::Heatmap { .. }));
 }

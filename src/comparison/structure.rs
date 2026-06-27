@@ -1,7 +1,8 @@
 use serde_json::{Map, Value};
 
 use crate::plot::flags::parse_cf_flags;
-use crate::zarr::{ZarrNodeKind, ZarrStore, ZarrTreeNode};
+use crate::product::Product;
+use crate::zarr::{ZarrNodeKind, ZarrTreeNode};
 
 use super::options::CompareOptions;
 
@@ -73,14 +74,14 @@ impl StructureReport {
 
 /// Compare hierarchy metadata between two products (no array payload I/O).
 pub fn compare_structure(
-    left: &ZarrStore,
-    right: &ZarrStore,
+    left: &Product,
+    right: &Product,
     options: &CompareOptions,
 ) -> StructureReport {
     let mut report = StructureReport::default();
 
-    left.tree.root.visit_nodes(&mut |node| {
-        let Some(other) = right.tree.root.find_by_path(&node.path) else {
+    left.tree().root.visit_nodes(&mut |node| {
+        let Some(other) = right.tree().root.find_by_path(&node.path) else {
             report.issues.push(StructureIssue {
                 path: node.path.clone(),
                 field: "node".to_string(),

@@ -1,0 +1,20 @@
+{
+  "chunks": {
+    "rows_an": 1200,
+    "columns_an": 1500,
+    "rows_ao": 1200,
+    "columns_ao": 900,
+    "rows_bn": 1200,
+    "columns_bn": 1500,
+    "rows_bo": 1200,
+    "columns_bo": 900,
+    "rows_in": 600,
+    "columns_in": 750,
+    "rows_io": 600,
+    "columns_io": 450,
+    "rows_fn": 600,
+    "columns_fn": 750,
+    "rows_fo": 600,
+    "columns_fo": 750
+  }
+}

@@ -24,7 +24,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Install Linux GUI build dependencies
+      - name: Install Linux build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -35,10 +35,15 @@ jobs:
             libxinerama-dev \
             libxcursor-dev \
             libxi-dev \
-            pkg-config
+            pkg-config \
+            libnetcdf-dev \
+            cmake
 
-      - name: Run tests
-        run: cargo test --locked
+      - name: Run tests (Zarr-only)
+        run: cargo test --locked --no-default-features --features dialog-portal
+
+      - name: Run tests (SAFE, static NetCDF)
+        run: cargo test --locked --no-default-features --features safe,dialog-portal,netcdf-static
 
   publish-crates:
     needs: test
@@ -64,15 +69,35 @@ jobs:
           - runner: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             archive: tar.gz
+            safe: false
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+            safe: true
           - runner: windows-latest
             target: x86_64-pc-windows-msvc
             archive: zip
+            safe: false
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+            safe: true
           - runner: macos-latest
             target: aarch64-apple-darwin
             archive: tar.gz
+            safe: false
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            archive: tar.gz
+            safe: true
           - runner: macos-latest
             target: x86_64-apple-darwin
             archive: tar.gz
+            safe: false
+          - runner: macos-latest
+            target: x86_64-apple-darwin
+            archive: tar.gz
+            safe: true
 
     runs-on: ${{ matrix.runner }}
     steps:
@@ -85,7 +110,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: release-${{ matrix.target }}
+          key: release-${{ matrix.target }}-safe-${{ matrix.safe }}
 
       - name: Install Linux GUI build dependencies
         if: runner.os == 'Linux'
@@ -99,21 +124,35 @@ jobs:
             libxinerama-dev \
             libxcursor-dev \
             libxi-dev \
-            pkg-config
+            pkg-config \
+            cmake
 
-      - name: Build release binary
-        run: cargo build --locked --release --target ${{ matrix.target }}
+      - name: Build release binary (Zarr-only)
+        if: matrix.safe == false
+        run: cargo build --locked --release --target ${{ matrix.target }} --no-default-features --features dialog-portal
 
-      - name: Package archive (Unix)
-        if: matrix.archive == 'tar.gz'
+      - name: Build release binary (SAFE, static NetCDF)
+        if: matrix.safe == true
+        run: cargo build --locked --release --target ${{ matrix.target }} --no-default-features --features safe,dialog-portal,netcdf-static
+
+      - name: Package archive (Unix, Zarr-only)
+        if: matrix.archive == 'tar.gz' && matrix.safe == false
         shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           ARCHIVE="${RUNNER_TEMP}/${{ env.BINARY_NAME }}-${VERSION}-${{ matrix.target }}.tar.gz"
           tar czf "${ARCHIVE}" -C "target/${{ matrix.target }}/release" "${{ env.BINARY_NAME }}"
 
-      - name: Package archive (Windows)
-        if: matrix.archive == 'zip'
+      - name: Package archive (Unix, SAFE)
+        if: matrix.archive == 'tar.gz' && matrix.safe == true
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCHIVE="${RUNNER_TEMP}/${{ env.BINARY_NAME }}-${VERSION}-${{ matrix.target }}-safe.tar.gz"
+          tar czf "${ARCHIVE}" -C "target/${{ matrix.target }}/release" "${{ env.BINARY_NAME }}"
+
+      - name: Package archive (Windows, Zarr-only)
+        if: matrix.archive == 'zip' && matrix.safe == false
         shell: pwsh
         run: |
           $Version = $env:GITHUB_REF_NAME.Substring(1)
@@ -122,10 +161,20 @@ jobs:
             -Path "target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}.exe" `
             -DestinationPath $Archive
 
+      - name: Package archive (Windows, SAFE)
+        if: matrix.archive == 'zip' && matrix.safe == true
+        shell: pwsh
+        run: |
+          $Version = $env:GITHUB_REF_NAME.Substring(1)
+          $Archive = Join-Path $env:RUNNER_TEMP "${{ env.BINARY_NAME }}-${Version}-${{ matrix.target }}-safe.zip"
+          Compress-Archive `
+            -Path "target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}.exe" `
+            -DestinationPath $Archive
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.target }}
+          name: ${{ matrix.target }}-safe-${{ matrix.safe }}
           path: ${{ runner.temp }}/${{ env.BINARY_NAME }}-*
           if-no-files-found: error
 

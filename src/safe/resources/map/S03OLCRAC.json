@@ -1,0 +1,21 @@
+{
+  "RC_annotations.nc:Sun_angles_times": "/conditions/geometry/sun_angles_times",
+  "RC_annotations.nc:Sun_azimuth_angles": "/conditions/geometry/sun_azimuth_angles",
+  "RC_annotations.nc:Sun_zenith_angles": "/conditions/geometry/sun_zenith_angles",
+  "RC_annotations.nc:diffuser_CCD_temperature": "/conditions/instrument/diffuser_ccd_temperature",
+  "RC_annotations.nc:shutter_CCD_temperature": "/conditions/instrument/shutter_ccd_temperature",
+  "RC_annotations.nc:quality_flags": "/quality/quality_flags",
+  "RC_annotations.nc:valid_DC_num": "/quality/valid_dc_num",
+  "RC_annotations.nc:valid_DO_num": "/quality/valid_do_num",
+  "RC_annotations.nc:valid_G_num": "/quality/valid_g_num",
+  "radiometric_coef.nc:gain_coefficients_unc": "/quality/gain_coefficients_unc",
+  "radiometric_coef.nc:dark_offset_coefficients_unc": "/quality/dark_offset_coefficients_unc",
+  "radiometric_coef.nc:dark_current_coefficients_unc": "/quality/dark_current_coefficients_unc",
+  "radiometric_coef.nc:dark_current_coefficients": "/measurements/dark_current_coefficients",
+  "radiometric_coef.nc:dark_offset_coefficients": "/measurements/dark_offset_coefficients",
+  "radiometric_coef.nc:diffuser_mean_blank_pixels": "/measurements/diffuser_mean_blank_pixels",
+  "radiometric_coef.nc:diffuser_mean_dark_pixels": "/measurements/diffuser_mean_dark_pixels",
+  "radiometric_coef.nc:gain_coefficients": "/measurements/gain_coefficients",
+  "radiometric_coef.nc:shutter_mean_blank_pixels": "/measurements/shutter_mean_blank_pixels",
+  "radiometric_coef.nc:shutter_mean_dark_pixels": "/measurements/shutter_mean_dark_pixels"
+}
