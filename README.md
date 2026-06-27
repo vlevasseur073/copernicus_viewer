@@ -5,6 +5,7 @@ A Rust GUI application to explore and visualize [EOPF](https://cpm.pages.eopf.co
 ## Features
 
 - Open EOPF Zarr stores (`.zarr` directories, `.zarr.zip` archives, or `s3://` URIs on AWS S3)
+- Open Sentinel-3 SAFE products (`.SEN3` directories) when built with the `safe` feature
 - Browse the product hierarchy (groups and variables) in a tree view
 - Inspect metadata with an xarray-inspired representation (DataTree / Group / DataArray with attributes)
 - **Product attributes** tree for root metadata (nested STAC / EOPF attributes, foldable like the hierarchy)
@@ -50,6 +51,30 @@ COPERNICUS_VIEWER_CAPTURE_DEMO=docs/screenshots cargo run -- \
 - Rust 1.75+
 - GPU support for the GUI (**wgpu** on Linux desktop, macOS, and Windows; **Glow**/OpenGL on WSL2 — see [WSL2 graphics](#wsl2-graphics))
 
+### Sentinel-3 SAFE (optional `safe` feature)
+
+The `safe` Cargo feature enables `.SEN3` support via NetCDF. It is **on by default** for local development.
+
+| Build | Command | NetCDF at build time | Runtime install |
+|-------|---------|----------------------|-----------------|
+| Default (Zarr + SAFE, system libs) | `cargo build` | `libnetcdf-dev` (Linux) | None for NetCDF if you ship `-safe` with `netcdf-static` |
+| Self-contained SAFE binary | `cargo build --features netcdf-static` | cmake + C++ toolchain | None — NetCDF/HDF5/zlib embedded |
+| Zarr-only (no SAFE) | `cargo build --no-default-features --features dialog-portal` | None | N/A |
+
+**GitHub Releases** ship two variants per platform: a Zarr-only binary and a `-safe` binary built with `netcdf-static` (no NetCDF install required for end users).
+
+On Linux, system development builds need:
+
+```bash
+sudo apt install libnetcdf-dev
+```
+
+Without `libnetcdf-dev`, use static linking:
+
+```bash
+cargo build --features netcdf-static
+```
+
 ### WSL2 / Linux system packages
 
 On **WSLg** (default on recent WSL2), the app uses Wayland automatically — no extra packages needed.
@@ -62,7 +87,7 @@ sudo apt install libxkbcommon-x11-0 libgl1-mesa-dri
 
 Runtime for the GTK file dialog (optional build): `libgtk-3-0`.
 
-**Opening products:** **File → Open Zarr…** opens an in-app browser for local `.zarr` directories and `.zarr.zip` archives — click or double-click a product, or paste a path and press **Open**. Use **S3** in that dialog to browse configured buckets and prefixes on object storage (see [S3 object storage](#s3-object-storage)). You can also paste an `s3://bucket/path/product.zarr` URI directly. Use **System picker…** for the native file chooser on local paths; it automatically uses a folder picker for `.zarr` paths and a file picker for `.zip` paths. You can open several products at once; each appears as a top-level entry in the **Hierarchy** panel. Close one with **✕** next to its name or **File → Close product**. Opening a product reads hierarchy metadata only; array values are loaded when you select a variable to plot.
+**Opening products:** **File → Open Zarr…** opens an in-app browser for local `.zarr` directories, `.zarr.zip` archives, and (when built with `safe`) `.SEN3` SAFE directories — click or double-click a product, or paste a path and press **Open**. Use **S3** in that dialog to browse configured buckets and prefixes on object storage (see [S3 object storage](#s3-object-storage)). You can also paste an `s3://bucket/path/product.zarr` URI directly. Use **System picker…** for the native file chooser on local paths; it automatically uses a folder picker for `.zarr` paths and a file picker for `.zip` paths. You can open several products at once; each appears as a top-level entry in the **Hierarchy** panel. Close one with **✕** next to its name or **File → Close product**. Opening a product reads hierarchy metadata only; array values are loaded when you select a variable to plot.
 
 If the native dialog is empty or opens twice on WSL, rebuild with the GTK backend:
 
@@ -116,6 +141,9 @@ Requires a Rust toolchain and GPU support (same as [Requirements](#requirements)
 ### Prebuilt binaries (GitHub Releases)
 
 Download the archive for your platform from [GitHub Releases](https://github.com/vlevasseur073/copernicus_viewer/releases), extract it, and run:
+
+- **`copernicus_viewer-{version}-{target}.tar.gz` / `.zip`** — Zarr-only (no `.SEN3` support)
+- **`copernicus_viewer-{version}-{target}-safe.tar.gz` / `.zip`** — Zarr + Sentinel-3 SAFE (self-contained NetCDF)
 
 ```bash
 # Linux / macOS

@@ -2,7 +2,8 @@ use anyhow::Result;
 use ndarray::ArrayD;
 use serde_json::{Map, Value};
 
-use crate::zarr::{ZarrNodeKind, ZarrStore};
+use crate::product::Product;
+use crate::zarr::ZarrNodeKind;
 
 use super::array_io::for_each_aligned_chunk;
 use super::options::CompareOptions;
@@ -85,8 +86,8 @@ impl DataReport {
 
 /// Compare measurement variable data between two products on the reference chunk grid.
 pub fn compare_variable_data(
-    left: &ZarrStore,
-    right: &ZarrStore,
+    left: &Product,
+    right: &Product,
     paths: &[String],
     options: &CompareOptions,
 ) -> DataReport {
@@ -107,22 +108,21 @@ pub fn compare_variable_data(
 }
 
 fn compare_one_variable(
-    left: &ZarrStore,
-    right: &ZarrStore,
+    left: &Product,
+    right: &Product,
     path: &str,
     options: &CompareOptions,
 ) -> Result<Option<VariableComparison>, String> {
-    let Some(left_node) = left.tree.root.find_by_path(path) else {
+    let Some(left_node) = left.tree().root.find_by_path(path) else {
         return Ok(None);
     };
-    let Some(right_node) = right.tree.root.find_by_path(path) else {
+    let Some(right_node) = right.tree().root.find_by_path(path) else {
         return Err("missing in new product".to_string());
     };
 
     let ZarrNodeKind::Array {
         shape: ref_shape,
         chunks: ref_chunks,
-        dtype: ref_dtype,
         attributes,
         ..
     } = &left_node.kind
@@ -131,9 +131,7 @@ fn compare_one_variable(
     };
 
     let ZarrNodeKind::Array {
-        shape: new_shape,
-        dtype: new_dtype,
-        ..
+        shape: new_shape, ..
     } = &right_node.kind
     else {
         return Ok(None);
@@ -152,13 +150,11 @@ fn compare_one_variable(
     let mut chunks_compared = 0usize;
 
     for_each_aligned_chunk(
-        &left.storage,
-        &right.storage,
+        left,
+        right,
         path,
         ref_shape,
         ref_chunks,
-        ref_dtype,
-        new_dtype,
         |reference, new| {
             accumulator.ingest(reference, new, relative_mode);
             chunks_compared += 1;

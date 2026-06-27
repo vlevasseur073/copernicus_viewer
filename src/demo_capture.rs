@@ -1,14 +1,13 @@
 //! Automated README screenshots (`COPERNICUS_VIEWER_CAPTURE_DEMO=<output-dir>`).
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use eframe::egui::{self, ColorImage, Event, UserData};
 use image::{ImageBuffer, RgbaImage};
 
 use copernicus_viewer::comparison::ComparisonTool;
 use copernicus_viewer::plot::PlotPanel;
-use copernicus_viewer::zarr::ZarrStore;
+use copernicus_viewer::product::ProductHandle;
 
 const LST_PATH: &str = "/measurements/lst";
 const EXPLORE_SHOT: &str = "01-explore-lst.png";
@@ -63,7 +62,7 @@ impl DemoCapture {
     pub fn tick(
         &mut self,
         ctx: &egui::Context,
-        stores: &[Arc<ZarrStore>],
+        stores: &[ProductHandle],
         plot_panel: &PlotPanel,
         comparison: &ComparisonTool,
     ) -> Option<DemoAction> {
@@ -73,7 +72,7 @@ impl DemoCapture {
 
         match self.step {
             Step::WaitStores if stores.len() >= 2 => {
-                if stores[0].tree.root.find_by_path(LST_PATH).is_some() {
+                if stores[0].tree().root.find_by_path(LST_PATH).is_some() {
                     self.step = Step::WaitPlot;
                     return Some(DemoAction::SelectLst);
                 }

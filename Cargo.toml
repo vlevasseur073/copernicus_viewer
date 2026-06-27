@@ -26,9 +26,13 @@ name = "copernicus_viewer"
 path = "src/main.rs"
 
 [features]
-default = ["dialog-portal"]
+default = ["dialog-portal", "safe"]
 dialog-portal = ["rfd/xdg-portal", "rfd/async-std"]
 dialog-gtk = ["rfd/gtk3"]
+# Sentinel-3 SAFE (.SEN3) support via NetCDF (requires libnetcdf at build time, or netcdf-static).
+safe = ["dep:netcdf"]
+# Bundle libnetcdf/HDF5/zlib into the binary (cmake required at build time; no runtime install).
+netcdf-static = ["netcdf/static"]
 
 [dependencies]
 anyhow = "1"
@@ -49,6 +53,8 @@ tokio = { version = "1", features = ["rt-multi-thread"] }
 zarrs = { version = "0.23", features = ["filesystem", "ndarray", "blosc", "zstd", "gzip", "transpose"] }
 zarrs_object_store = { version = "0.6.2", features = ["aws"] }
 zarrs_zip = "0.5"
+netcdf = { version = "0.12", features = ["ndarray"], optional = true }
+quick-xml = "0.37"
 
 [dev-dependencies]
 tempfile = "3.27.0"

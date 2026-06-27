@@ -1,4 +1,4 @@
-//! Chunk-aligned array I/O for comparing two Zarr products on the reference grid.
+//! Chunk-aligned array I/O for comparing two products on the reference grid.
 
 use std::ops::Range;
 
@@ -7,6 +7,8 @@ use ndarray::ArrayD;
 use zarrs::array::Array;
 use zarrs::array::ArraySubset;
 use zarrs::storage::ReadableListableStorage;
+
+use crate::product::Product;
 
 /// Chunk boundaries aligned on the reference product's chunk grid.
 pub fn iter_reference_chunk_subsets(shape: &[u64], ref_chunks: &[u64]) -> Vec<Vec<Range<u64>>> {
@@ -64,27 +66,23 @@ fn cartesian_ranges(per_dim: &[Vec<Range<u64>>]) -> Vec<Vec<Range<u64>>> {
 
 /// Read matching logical slices from both products, iterating on the reference chunk grid.
 pub fn for_each_aligned_chunk<F>(
-    ref_storage: &ReadableListableStorage,
-    new_storage: &ReadableListableStorage,
+    left: &Product,
+    right: &Product,
     path: &str,
     shape: &[u64],
     ref_chunks: &[u64],
-    ref_dtype: &str,
-    new_dtype: &str,
     mut f: F,
 ) -> Result<()>
 where
     F: FnMut(&ArrayD<f64>, &ArrayD<f64>) -> Result<()>,
 {
-    let array_ref = Array::open(ref_storage.clone(), path)
-        .with_context(|| format!("failed to open reference array at {path}"))?;
-    let array_new = Array::open(new_storage.clone(), path)
-        .with_context(|| format!("failed to open new array at {path}"))?;
-
     for ranges in iter_reference_chunk_subsets(shape, ref_chunks) {
-        let subset = ArraySubset::new_with_ranges(&ranges);
-        let ref_data = read_subset_as_f64(&array_ref, &subset, ref_dtype)?;
-        let new_data = read_subset_as_f64(&array_new, &subset, new_dtype)?;
+        let ref_data = left
+            .read_array_subset_f64(path, &ranges)
+            .with_context(|| format!("read reference chunk at {path}"))?;
+        let new_data = right
+            .read_array_subset_f64(path, &ranges)
+            .with_context(|| format!("read new chunk at {path}"))?;
         if ref_data.len() != new_data.len() {
             anyhow::bail!(
                 "aligned chunk size mismatch at {path} subset {ranges:?}: reference {} vs new {}",
@@ -98,7 +96,7 @@ where
     Ok(())
 }
 
-/// Read a full logical array (used by tests and tooling).
+/// Read a full logical array from a Zarr-backed product (used by tests and tooling).
 #[allow(dead_code)]
 pub fn read_array_f64(
     storage: &ReadableListableStorage,
@@ -110,10 +108,10 @@ pub fn read_array_f64(
         .with_context(|| format!("failed to open array at {path}"))?;
     let ranges: Vec<Range<u64>> = shape.iter().map(|&dim| 0..dim).collect();
     let subset = ArraySubset::new_with_ranges(&ranges);
-    read_subset_as_f64(&array, &subset, dtype_hint)
+    read_zarr_subset_as_f64(&array, &subset, dtype_hint)
 }
 
-fn read_subset_as_f64(
+fn read_zarr_subset_as_f64(
     array: &Array<dyn zarrs::storage::ReadableListableStorageTraits>,
     subset: &ArraySubset,
     dtype_hint: &str,

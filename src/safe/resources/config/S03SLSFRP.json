@@ -1,0 +1,13 @@
+{
+  "chunks": {
+    "rows_an": 1200,
+    "columns_an": 1500,
+    "rows_bn": 1200,
+    "columns_bn": 1500,
+    "rows_in": 600,
+    "columns_in": 750,
+    "rows_fn": 600,
+    "columns_fn": 750,
+    "fires": 1000
+  }
+}

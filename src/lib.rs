@@ -8,6 +8,7 @@
 //!
 //! # Modules
 //!
+//! - [`product`] — unified Zarr and Sentinel-3 SAFE product access
 //! - [`zarr`] — store I/O, S3 credentials, product location resolution, hierarchy tree
 //! - [`display`] — xarray-style representations, STAC attributes, statistics, footprint map
 //! - [`plot`] — async array loading, heatmaps, CF flag variables, geo-referencing
@@ -30,10 +31,10 @@
 //!
 //! ```no_run
 //! use copernicus_viewer::comparison::{compare_products, ComparisonOptions};
-//! use copernicus_viewer::zarr::open_store;
+//! use copernicus_viewer::open_product;
 //!
-//! let reference = open_store("/path/to/reference.zarr").unwrap();
-//! let new = open_store("/path/to/new.zarr").unwrap();
+//! let reference = open_product("/path/to/reference.zarr").unwrap();
+//! let new = open_product("/path/to/new.zarr").unwrap();
 //! let result = compare_products(&reference, &new);
 //! println!("{}", result.formatted_summary(false));
 //! ```
@@ -45,4 +46,9 @@
 pub mod comparison;
 pub mod display;
 pub mod plot;
+pub mod product;
+#[cfg(feature = "safe")]
+pub mod safe;
 pub mod zarr;
+
+pub use product::{Product, ProductHandle, open_product};

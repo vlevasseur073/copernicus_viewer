@@ -1,7 +1,11 @@
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use ndarray::ArrayD;
+use zarrs::array::Array;
+use zarrs::array::ArraySubset;
 use zarrs::filesystem::FilesystemStore;
 use zarrs::group::Group;
 use zarrs::storage::storage_adapter::async_to_sync::AsyncToSyncStorageAdapter;
@@ -17,9 +21,7 @@ use super::tree::{ZarrTree, apply_root_metadata, build_tree};
 pub use super::location::resolve_zarr_product_path;
 
 /// An opened EOPF Zarr product with readable storage and a pre-built hierarchy tree.
-///
-/// Array chunk data is not loaded at open time; use [`crate::plot::load_plot_data`] or
-/// comparison helpers when pixel values are needed.
+#[derive(Clone)]
 pub struct ZarrStore {
     /// Backing zarrs storage (filesystem, zip archive, or S3 via async adapter).
     pub storage: ReadableListableStorage,
@@ -51,6 +53,81 @@ pub fn open_store(input: &str) -> Result<ZarrStore> {
         root_path: resolved.canonical_id,
         tree,
     })
+}
+
+impl ZarrStore {
+    /// Read a Zarr array subset as `f64` values.
+    pub fn read_array_subset_f64(&self, path: &str, ranges: &[Range<u64>]) -> Result<ArrayD<f64>> {
+        let node = self
+            .tree
+            .root
+            .find_by_path(path)
+            .with_context(|| format!("unknown array path {path}"))?;
+        let dtype = match &node.kind {
+            super::tree::ZarrNodeKind::Array { dtype, .. } => dtype.clone(),
+            _ => anyhow::bail!("{path} is not an array"),
+        };
+
+        let array = Array::open(self.storage.clone(), path)
+            .with_context(|| format!("failed to open array at {path}"))?;
+        let subset = ArraySubset::new_with_ranges(ranges);
+        read_zarr_subset_as_f64(&array, &subset, &dtype)
+    }
+}
+
+fn read_zarr_subset_as_f64(
+    array: &Array<dyn zarrs::storage::ReadableListableStorageTraits>,
+    subset: &ArraySubset,
+    dtype_hint: &str,
+) -> Result<ArrayD<f64>> {
+    let normalized = dtype_hint.to_ascii_lowercase();
+
+    macro_rules! read_as {
+        ($t:ty) => {{
+            let arr: ArrayD<$t> = array
+                .retrieve_array_subset::<ArrayD<$t>>(subset)
+                .with_context(|| {
+                    format!(
+                        "failed to read array subset as {}",
+                        std::any::type_name::<$t>()
+                    )
+                })?;
+            return Ok(arr.mapv(|v| v as f64));
+        }};
+    }
+
+    if normalized.contains("float64") || normalized.contains("<f8") || normalized.contains("|f8") {
+        read_as!(f64);
+    }
+    if normalized.contains("float32") || normalized.contains("<f4") || normalized.contains("|f4") {
+        read_as!(f32);
+    }
+    if normalized.contains("uint64") || normalized.contains("<u8") || normalized.contains("|u8") {
+        read_as!(u64);
+    }
+    if normalized.contains("uint32") || normalized.contains("<u4") || normalized.contains("|u4") {
+        read_as!(u32);
+    }
+    if normalized.contains("uint16") || normalized.contains("<u2") || normalized.contains("|u2") {
+        read_as!(u16);
+    }
+    if normalized.contains("uint8") || normalized.contains("<u1") || normalized.contains("|u1") {
+        read_as!(u8);
+    }
+    if normalized.contains("int64") || normalized.contains("<i8") || normalized.contains("|i8") {
+        read_as!(i64);
+    }
+    if normalized.contains("int32") || normalized.contains("<i4") || normalized.contains("|i4") {
+        read_as!(i32);
+    }
+    if normalized.contains("int16") || normalized.contains("<i2") || normalized.contains("|i2") {
+        read_as!(i16);
+    }
+    if normalized.contains("int8") || normalized.contains("<i1") || normalized.contains("|i1") {
+        read_as!(i8);
+    }
+
+    anyhow::bail!("unsupported data type for array read: {dtype_hint}")
 }
 
 fn create_storage(loc: &ProductLocation) -> Result<ReadableListableStorage> {

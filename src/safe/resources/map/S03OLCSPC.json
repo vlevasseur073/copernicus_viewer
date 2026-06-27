@@ -1,0 +1,12 @@
+{
+  "SC_annotations.nc:rows_index": "/quality/rows_index",
+ "SC_annotations.nc:quality_flags": "/quality/quality_flags",
+ "SC_annotations.nc:shutter_CCD_temperature": "/conditions/instrument/shutter_ccd_temperature",
+ "SC_annotations.nc:diffuser_CCD_temperature": "/conditions/instrument/diffuser_ccd_temperature",
+ "cal_wavelengths.nc:absolute_central_wavelength": "/measurements/absolute_central_wavelength",
+ "cal_wavelengths.nc:shutter_mean_dark_pixels": "/measurements/shutter_mean_dark_pixels",
+ "cal_wavelengths.nc:shutter_mean_blank_pixels": "/measurements/shutter_mean_blank_pixels",
+ "cal_wavelengths.nc:diffuser_mean_dark_pixels": "/measurements/diffuser_mean_dark_pixels",
+ "cal_wavelengths.nc:diffuser_mean_blank_pixels": "/measurements/diffuser_mean_blank_pixels",
+ "time_coordinates.nc:time_stamp": "/measurements/time_stamp"
+}

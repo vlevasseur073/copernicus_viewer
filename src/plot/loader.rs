@@ -2,14 +2,12 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
 use ndarray::ArrayD;
-use zarrs::array::Array;
-use zarrs::array::ArraySubset;
-use zarrs::storage::ReadableListableStorage;
 
 use crate::display::stats::{ArrayPreview, ArrayStatistics, build_preview, compute_statistics};
 use crate::plot::cf_decode::{apply_cf_decode, parse_cf_encoding};
 use crate::plot::flags::{CfFlags, FlagSelection, apply_flag_selection, parse_cf_flags};
-use crate::plot::georef::{GeorefInfo, resolve_georef};
+use crate::plot::georef::{GeorefInfo, resolve_georef_for_product};
+use crate::product::Product;
 use crate::zarr::{ZarrNodeKind, ZarrTreeNode};
 
 /// Parameters for loading and plotting a Zarr array subset.
@@ -87,7 +85,7 @@ const MAX_PLOT_PIXELS: usize = 4096 * 4096;
 /// Reads a 1D slice or 2D subset (with optional downsampling), applies CF flag
 /// selection, and resolves geo-referencing from coordinate variables.
 pub fn load_plot_data(
-    storage: &ReadableListableStorage,
+    product: &Product,
     tree: &ZarrTreeNode,
     kind: &ZarrNodeKind,
     request: &PlotRequest,
@@ -103,7 +101,6 @@ pub fn load_plot_data(
 
     let ZarrNodeKind::Array {
         shape,
-        dtype,
         attributes,
         fill_value,
         ..
@@ -114,15 +111,13 @@ pub fn load_plot_data(
 
     let flags = parse_cf_flags(attributes, fill_value.as_ref());
 
-    let array = Array::open(storage.clone(), &request.array_path)
-        .with_context(|| format!("failed to open array at {}", request.array_path))?;
-
     report(0.15, "Building read subset…");
     let (subset_ranges, y_range, x_range) = build_subset(shape, &request.slice_indices)?;
-    let array_subset = ArraySubset::new_with_ranges(&subset_ranges);
 
     report(0.35, "Reading array data…");
-    let mut values = read_as_f64_array(&array, &array_subset, dtype)?;
+    let mut values = product
+        .read_array_subset_f64(&request.array_path, &subset_ranges)
+        .with_context(|| format!("failed to read array at {}", request.array_path))?;
 
     let encoding = parse_cf_encoding(attributes, fill_value.as_ref());
 
@@ -139,7 +134,9 @@ pub fn load_plot_data(
     let preview = build_preview(&values, 8, 8);
 
     report(0.80, "Resolving geospatial metadata…");
-    let georef = resolve_georef(storage, tree, &request.array_path, kind, &y_range, &x_range).ok();
+    let georef =
+        resolve_georef_for_product(product, tree, &request.array_path, kind, &y_range, &x_range)
+            .ok();
 
     report(0.92, "Preparing plot…");
     let plot = plot_from_values(
@@ -224,61 +221,6 @@ fn capped_range(size: u64, max: usize) -> std::ops::Range<u64> {
     }
     let start = (size - max) / 2;
     (start as u64)..((start + max) as u64)
-}
-
-fn read_as_f64_array(
-    array: &Array<dyn zarrs::storage::ReadableListableStorageTraits>,
-    subset: &ArraySubset,
-    dtype_hint: &str,
-) -> Result<ArrayD<f64>> {
-    let normalized = dtype_hint.to_ascii_lowercase();
-
-    macro_rules! read_as {
-        ($t:ty) => {{
-            let arr: ArrayD<$t> = array
-                .retrieve_array_subset::<ArrayD<$t>>(subset)
-                .with_context(|| {
-                    format!(
-                        "failed to read array subset as {}",
-                        std::any::type_name::<$t>()
-                    )
-                })?;
-            return Ok(arr.mapv(|v| v as f64));
-        }};
-    }
-
-    if normalized.contains("float64") || normalized.contains("<f8") || normalized.contains("|f8") {
-        read_as!(f64);
-    }
-    if normalized.contains("float32") || normalized.contains("<f4") || normalized.contains("|f4") {
-        read_as!(f32);
-    }
-    if normalized.contains("uint64") || normalized.contains("<u8") || normalized.contains("|u8") {
-        read_as!(u64);
-    }
-    if normalized.contains("uint32") || normalized.contains("<u4") || normalized.contains("|u4") {
-        read_as!(u32);
-    }
-    if normalized.contains("uint16") || normalized.contains("<u2") || normalized.contains("|u2") {
-        read_as!(u16);
-    }
-    if normalized.contains("uint8") || normalized.contains("<u1") || normalized.contains("|u1") {
-        read_as!(u8);
-    }
-    if normalized.contains("int64") || normalized.contains("<i8") || normalized.contains("|i8") {
-        read_as!(i64);
-    }
-    if normalized.contains("int32") || normalized.contains("<i4") || normalized.contains("|i4") {
-        read_as!(i32);
-    }
-    if normalized.contains("int16") || normalized.contains("<i2") || normalized.contains("|i2") {
-        read_as!(i16);
-    }
-    if normalized.contains("int8") || normalized.contains("<i1") || normalized.contains("|i1") {
-        read_as!(i8);
-    }
-
-    anyhow::bail!("unsupported data type for plotting: {dtype_hint}")
 }
 
 fn plot_from_values(

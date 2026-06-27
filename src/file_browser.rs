@@ -2,6 +2,8 @@
 
 use std::path::{Path, PathBuf};
 
+#[cfg(feature = "safe")]
+use copernicus_viewer::safe::is_safe_product_dir;
 use copernicus_viewer::zarr::{
     ProductLocation, format_s3_uri, parent_prefix, parse_product_location,
 };
@@ -20,13 +22,13 @@ pub enum BrowserLocation {
 /// Entry shown in the in-app file / S3 browser.
 #[derive(Clone, Debug)]
 pub enum BrowserItem {
-    /// Subdirectory or S3 prefix; `zarr_product` marks openable `.zarr` products.
+    /// Subdirectory or S3 prefix; `zarr_product` marks openable product directories.
     Directory {
         /// Display name (final path segment).
         name: String,
         /// Full path or `s3://` URI to open or navigate into.
         location: String,
-        /// Whether double-click opens this entry as a Zarr product.
+        /// Whether double-click opens this entry as a product (.zarr or .SEN3).
         zarr_product: bool,
     },
     /// Local `.zarr.zip` archive.
@@ -219,7 +221,7 @@ pub fn list_directory(dir: &Path) -> Result<Vec<BrowserItem>, String> {
 
         if path.is_dir() {
             dirs.push(BrowserItem::Directory {
-                zarr_product: is_zarr_product_dir(&name, &path),
+                zarr_product: is_openable_product_dir(&name, &path),
                 name,
                 location: path.display().to_string(),
             });
@@ -261,6 +263,18 @@ pub fn list_directory(dir: &Path) -> Result<Vec<BrowserItem>, String> {
 /// Returns `true` when `path` looks like a Zarr product directory.
 pub fn is_zarr_product_dir(name: &str, path: &Path) -> bool {
     name.ends_with(".zarr") || path.join(".zgroup").exists() || path.join(".zmetadata").exists()
+}
+
+/// Returns `true` when `path` is an openable product directory (Zarr or SAFE).
+#[cfg(not(feature = "safe"))]
+pub fn is_openable_product_dir(name: &str, path: &Path) -> bool {
+    is_zarr_product_dir(name, path)
+}
+
+/// Returns `true` when `path` is an openable product directory (Zarr or SAFE).
+#[cfg(feature = "safe")]
+pub fn is_openable_product_dir(name: &str, path: &Path) -> bool {
+    is_zarr_product_dir(name, path) || is_safe_product_dir(path)
 }
 
 /// Returns `true` when `name` is a Zarr zip archive file.

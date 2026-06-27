@@ -13,9 +13,10 @@ use copernicus_viewer::comparison::{
 };
 use copernicus_viewer::display::{InspectorView, render_inspector};
 use copernicus_viewer::plot::{PlotLoadResult, PlotPanel, load_plot_data, shared_progress};
+use copernicus_viewer::product::{Product, ProductHandle, open_product};
 use copernicus_viewer::zarr::{
-    DownloadProgressCallback, ZarrNodeKind, ZarrStore, ZarrTreeNode, download_s3_product,
-    is_s3_product, open_store, parse_s3_location, resolve_zarr_product_path,
+    DownloadProgressCallback, ZarrNodeKind, ZarrTreeNode, download_s3_product, is_s3_product,
+    parse_s3_location, resolve_zarr_product_path,
 };
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct SelectedNode {
@@ -58,7 +59,7 @@ struct PendingDownloadPick {
 enum LoadMessage {
     StoreReady {
         location: String,
-        result: Result<ZarrStore, String>,
+        result: Result<Product, String>,
     },
     BrowseListReady {
         request_id: u64,
@@ -93,7 +94,7 @@ enum LoadMessage {
 
 /// Root egui application state for the Copernicus Viewer window.
 pub struct CopernicusViewer {
-    stores: Vec<Arc<ZarrStore>>,
+    stores: Vec<ProductHandle>,
     selected: Option<SelectedNode>,
     inspector: InspectorView,
     plot_panel: PlotPanel,
@@ -157,7 +158,7 @@ impl CopernicusViewer {
     }
 
     fn show_open_product_dialog(&mut self) {
-        let last_root = self.stores.last().map(|store| store.root_path.as_str());
+        let last_root = self.stores.last().map(|store| store.root_path());
         let store_root = last_root
             .filter(|root| !root.starts_with("s3://"))
             .map(PathBuf::from);
@@ -211,11 +212,15 @@ impl CopernicusViewer {
             let canonical = resolve_zarr_product_path(Path::new(trimmed))
                 .display()
                 .to_string();
-            if self.stores.iter().any(|store| store.root_path == canonical) {
+            if self
+                .stores
+                .iter()
+                .any(|store| store.root_path() == canonical)
+            {
                 self.status_message = format!("Already open: {canonical}");
                 return;
             }
-        } else if self.stores.iter().any(|store| store.root_path == trimmed) {
+        } else if self.stores.iter().any(|store| store.root_path() == trimmed) {
             self.status_message = format!("Already open: {trimmed}");
             return;
         }
@@ -225,7 +230,7 @@ impl CopernicusViewer {
         let input = trimmed.to_string();
         let tx = self.load_tx.clone();
         thread::spawn(move || {
-            let result = open_store(&input).map_err(|e| e.to_string());
+            let result = open_product(&input).map_err(|e| e.to_string());
             let _ = tx.send(LoadMessage::StoreReady {
                 location: input,
                 result,
@@ -244,7 +249,7 @@ impl CopernicusViewer {
         let mut navigate_to: Option<crate::file_browser::BrowserLocation> = None;
         let is_s3 = self.open_product_dialog.browser_location.is_s3();
 
-        let window = egui::Window::new("Open Zarr product")
+        let window = egui::Window::new("Open Product")
             .collapsible(false)
             .resizable(true)
             .default_width(640.0)
@@ -436,8 +441,8 @@ impl CopernicusViewer {
         }
     }
 
-    fn product_name(store: &ZarrStore) -> String {
-        let root = &store.root_path;
+    fn product_name(store: &Product) -> String {
+        let root = &store.root_path();
         if let Some(rest) = root.strip_prefix("s3://")
             && let Some(name) = rest.rsplit('/').next().filter(|s| !s.is_empty())
         {
@@ -486,7 +491,7 @@ impl CopernicusViewer {
             self.inspector = InspectorView::default();
 
             if let Some(store) = self.stores.first() {
-                let root = store.tree.root.clone();
+                let root = store.tree().root.clone();
                 self.select_node(0, &root);
             }
         }
@@ -514,7 +519,7 @@ impl CopernicusViewer {
     fn can_download_product(&self, store_index: usize) -> bool {
         self.stores
             .get(store_index)
-            .is_some_and(|store| is_s3_product(&store.root_path))
+            .is_some_and(|store| is_s3_product(store.root_path()))
     }
 
     fn can_download_selected_product(&self) -> bool {
@@ -541,8 +546,8 @@ impl CopernicusViewer {
         let Some(store) = self.stores.get(store_index) else {
             return;
         };
-        let root_path = store.root_path.clone();
-        let (bucket, prefix) = match parse_s3_location(&root_path) {
+        let root_path = store.root_path();
+        let (bucket, prefix) = match parse_s3_location(root_path) {
             Ok(location) => location,
             Err(err) => {
                 self.status_message = format!("Download failed: {err}");
@@ -595,7 +600,7 @@ impl CopernicusViewer {
         });
 
         let store = self.stores.get(store_index);
-        let root = store.map(|s| s.tree.root.clone());
+        let root = store.map(|s| s.tree().root.clone());
         let product_name = store
             .as_ref()
             .map(|s| Self::product_name(s))
@@ -636,7 +641,7 @@ impl CopernicusViewer {
             return;
         };
 
-        let Some(node) = store.tree.root.find_by_path(&path) else {
+        let Some(node) = store.tree().root.find_by_path(&path) else {
             return;
         };
 
@@ -653,8 +658,8 @@ impl CopernicusViewer {
         });
 
         let kind = node.kind.clone();
-        let storage = store.storage.clone();
-        let tree = store.tree.root.clone();
+        let product = store.clone();
+        let tree = store.tree().root.clone();
         let tx = self.load_tx.clone();
         let path_for_progress = path.clone();
 
@@ -675,7 +680,7 @@ impl CopernicusViewer {
 
         thread::spawn(move || {
             let progress = shared_progress(progress_tx);
-            let result = load_plot_data(&storage, &tree, &kind, &request, Some(progress))
+            let result = load_plot_data(&product, &tree, &kind, &request, Some(progress))
                 .map_err(|e| e.to_string());
             let _ = tx.send(LoadMessage::PlotReady {
                 store_index,
@@ -713,16 +718,16 @@ impl CopernicusViewer {
                 }
                 LoadMessage::StoreReady { location, result } => match result {
                     Ok(store) => {
+                        let root_path = store.root_path().to_string();
                         if self
                             .stores
                             .iter()
-                            .any(|existing| existing.root_path == store.root_path)
+                            .any(|existing| existing.root_path() == root_path)
                         {
-                            self.status_message = format!("Already open: {}", store.root_path);
+                            self.status_message = format!("Already open: {root_path}");
                             continue;
                         }
                         let is_first = self.stores.is_empty();
-                        let root_path = store.root_path.clone();
                         self.stores.push(Arc::new(store));
                         let count = self.stores.len();
                         self.status_message = format!(
@@ -730,7 +735,7 @@ impl CopernicusViewer {
                             if count == 1 { "" } else { "s" }
                         );
                         if is_first {
-                            let root = self.stores[0].tree.root.clone();
+                            let root = self.stores[0].tree().root.clone();
                             self.select_node(0, &root);
                         }
                     }
@@ -891,8 +896,8 @@ impl CopernicusViewer {
         let mut to_download: Option<usize> = None;
 
         for (store_index, product_name) in products {
-            let root = self.stores[store_index].tree.root.clone();
-            let is_s3 = is_s3_product(&self.stores[store_index].root_path);
+            let root = self.stores[store_index].tree().root.clone();
+            let is_s3 = is_s3_product(self.stores[store_index].root_path());
             ui.horizontal(|ui| {
                 if ui
                     .small_button("✕")
@@ -959,7 +964,7 @@ impl eframe::App for CopernicusViewer {
             match action {
                 Some(crate::demo_capture::DemoAction::SelectLst) => {
                     if let Some(node) = self.stores[0]
-                        .tree
+                        .tree()
                         .root
                         .find_by_path("/measurements/lst")
                         .cloned()
@@ -1003,7 +1008,7 @@ impl eframe::App for CopernicusViewer {
         egui::Panel::top("menu").show_inside(ui, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("File", |ui| {
-                    if ui.button("Open Zarr…").clicked() {
+                    if ui.button("Open Product…").clicked() {
                         self.show_open_product_dialog();
                         ui.close();
                     }

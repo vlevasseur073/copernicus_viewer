@@ -1,7 +1,10 @@
+use std::collections::HashSet;
+
 use serde_json::{Map, Value};
 
 use crate::plot::flags::parse_cf_flags;
-use crate::zarr::{ZarrNodeKind, ZarrStore, ZarrTreeNode};
+use crate::product::Product;
+use crate::zarr::{ZarrNodeKind, ZarrTreeNode};
 
 use super::options::CompareOptions;
 
@@ -73,14 +76,18 @@ impl StructureReport {
 
 /// Compare hierarchy metadata between two products (no array payload I/O).
 pub fn compare_structure(
-    left: &ZarrStore,
-    right: &ZarrStore,
+    left: &Product,
+    right: &Product,
     options: &CompareOptions,
 ) -> StructureReport {
     let mut report = StructureReport::default();
 
-    left.tree.root.visit_nodes(&mut |node| {
-        let Some(other) = right.tree.root.find_by_path(&node.path) else {
+    left.tree().root.visit_nodes(&mut |node| {
+        if should_skip_comparison_node(node) {
+            return;
+        }
+
+        let Some(other) = right.tree().root.find_by_path(&node.path) else {
             report.issues.push(StructureIssue {
                 path: node.path.clone(),
                 field: "node".to_string(),
@@ -247,13 +254,29 @@ fn attrs_equal(a: &Map<String, Value>, b: &Map<String, Value>) -> bool {
     a == b
 }
 
+const COORDINATE_LEAF_NAMES: &[&str] = &[
+    "latitude",
+    "longitude",
+    "x",
+    "y",
+    "columns",
+    "rows",
+    "orphan_pixels",
+    "p_atmos",
+    "t_series",
+];
+
 /// Returns `true` when the node is a coordinate or geometry auxiliary variable.
 pub fn is_coordinate_variable(node: &ZarrTreeNode) -> bool {
     let ZarrNodeKind::Array { attributes, .. } = &node.kind else {
         return false;
     };
 
-    if node.path.contains("/coordinates/") || node.path.contains("/conditions/geometry/") {
+    if node.path.starts_with("/coords/") || node.path.contains("/coordinates/") {
+        return true;
+    }
+
+    if COORDINATE_LEAF_NAMES.contains(&node.name.as_str()) {
         return true;
     }
 
@@ -283,6 +306,30 @@ pub fn is_coordinate_variable(node: &ZarrTreeNode) -> bool {
     }
 
     false
+}
+
+fn should_skip_comparison_node(node: &ZarrTreeNode) -> bool {
+    node.path.starts_with("/coords/") || is_coordinate_variable(node)
+}
+
+/// Sorted array paths excluding coordinate/auxiliary variables.
+pub fn collect_comparable_array_paths(root: &ZarrTreeNode) -> Vec<String> {
+    let mut paths = Vec::new();
+    root.visit_nodes(&mut |node| {
+        if node.is_array() && !is_coordinate_variable(node) {
+            paths.push(node.path.clone());
+        }
+    });
+    paths.sort();
+    paths
+}
+
+/// Reference-centric comparability: every non-coordinate array in `reference` exists in `new`.
+pub fn is_comparable_for_comparison(reference: &ZarrTreeNode, new: &ZarrTreeNode) -> bool {
+    let new_paths: HashSet<_> = collect_comparable_array_paths(new).into_iter().collect();
+    collect_comparable_array_paths(reference)
+        .iter()
+        .all(|path| new_paths.contains(path))
 }
 
 /// Returns `true` when the node is a measurement variable eligible for data comparison.
@@ -357,4 +404,49 @@ pub fn collect_flag_variables(root: &ZarrTreeNode) -> Vec<String> {
     });
     paths.sort();
     paths
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::zarr::ZarrNodeKind;
+
+    fn array_node(path: &str) -> ZarrTreeNode {
+        let name = path.rsplit('/').next().unwrap_or(path).to_string();
+        ZarrTreeNode {
+            name,
+            path: path.to_string(),
+            kind: ZarrNodeKind::Array {
+                shape: vec![1],
+                chunks: vec![1],
+                dtype: "float32".to_string(),
+                dimension_names: Vec::new(),
+                attributes: Map::new(),
+                fill_value: None,
+            },
+            children: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn safe_coords_are_coordinate_variables() {
+        assert!(is_coordinate_variable(&array_node("/coords/latitude_in")));
+    }
+
+    #[test]
+    fn zarr_embedded_coords_are_coordinate_variables() {
+        assert!(is_coordinate_variable(&array_node(
+            "/measurements/latitude"
+        )));
+        assert!(is_coordinate_variable(&array_node(
+            "/conditions/meteorology/p_atmos"
+        )));
+    }
+
+    #[test]
+    fn geometry_measurements_are_not_coordinate_variables() {
+        assert!(!is_coordinate_variable(&array_node(
+            "/conditions/geometry/sat_azimuth_tn"
+        )));
+    }
 }

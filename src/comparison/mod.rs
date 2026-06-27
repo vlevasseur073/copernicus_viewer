@@ -12,11 +12,10 @@ mod options;
 mod structure;
 
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use eframe::egui;
 
-use crate::zarr::ZarrStore;
+use crate::product::{Product, ProductHandle};
 
 pub use compare::{
     ComparisonOptions, ComparisonResult, compare_products, compare_products_with_options,
@@ -55,11 +54,11 @@ pub struct ComparisonTool {
     running: bool,
 }
 
-pub(crate) fn product_label(store: &ZarrStore) -> String {
-    PathBuf::from(&store.root_path)
+pub(crate) fn product_label(store: &Product) -> String {
+    PathBuf::from(store.root_path())
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| store.root_path.clone())
+        .unwrap_or_else(|| store.root_path().to_string())
 }
 
 impl ComparisonTool {
@@ -70,7 +69,7 @@ impl ComparisonTool {
     }
 
     /// Open the comparison window and immediately compare two open products by index.
-    pub fn open_and_compare(&mut self, left: usize, right: usize, stores: &[Arc<ZarrStore>]) {
+    pub fn open_and_compare(&mut self, left: usize, right: usize, stores: &[ProductHandle]) {
         // Open the comparison window and request a background run. The actual
         // work is performed by the application main loop which will detect the
         // pending request and spawn a worker thread.
@@ -90,7 +89,7 @@ impl ComparisonTool {
     }
 
     /// Render the comparison window and controls.
-    pub fn ui(&mut self, ctx: &egui::Context, stores: &[Arc<ZarrStore>]) {
+    pub fn ui(&mut self, ctx: &egui::Context, stores: &[ProductHandle]) {
         if !self.open {
             return;
         }
@@ -179,7 +178,7 @@ impl ComparisonTool {
 
     fn product_selector(
         ui: &mut egui::Ui,
-        stores: &[Arc<ZarrStore>],
+        stores: &[ProductHandle],
         label: &str,
         index: &mut usize,
     ) {
@@ -362,9 +361,12 @@ impl ComparisonTool {
 mod tests {
     use super::*;
 
+    use crate::product::Product;
+    use crate::zarr::ZarrStore;
+
     #[test]
     fn product_label_uses_final_path_segment() {
-        let store = ZarrStore {
+        let store = Product::Zarr(ZarrStore {
             storage: std::sync::Arc::new(
                 zarrs::filesystem::FilesystemStore::new(".").expect("store"),
             ),
@@ -379,7 +381,7 @@ mod tests {
                     children: vec![],
                 },
             },
-        };
+        });
         assert_eq!(product_label(&store), "S03OLCEFR_20230509.zarr");
     }
 }
