@@ -2,7 +2,9 @@ use copernicus_viewer::display::{AttributeNode, InspectorView, parse_root_attrib
 use copernicus_viewer::plot::{
     FlagSelection, PlotData, PlotRequest, load_plot_data, parse_cf_flags,
 };
-use copernicus_viewer::product::{Product, open_product};
+#[cfg(feature = "safe")]
+use copernicus_viewer::product::Product;
+use copernicus_viewer::product::open_product;
 use copernicus_viewer::zarr::ZarrNodeKind;
 
 #[test]
