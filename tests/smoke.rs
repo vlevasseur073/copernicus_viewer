@@ -22,11 +22,7 @@ fn opens_sample_product_and_loads_plot() {
         .find_by_path("/measurements/image/oa01_radiance")
         .expect("find array");
 
-    let request = PlotRequest {
-        array_path: "/measurements/image/oa01_radiance".to_string(),
-        slice_indices: vec![],
-        flag_selection: FlagSelection::Raw,
-    };
+    let request = PlotRequest::new("/measurements/image/oa01_radiance");
     let loaded = load_plot_data(&product, &product.tree().root, &node.kind, &request, None)
         .expect("load plot");
     assert!(matches!(loaded.plot, PlotData::Heatmap { .. }));
@@ -112,6 +108,8 @@ fn loads_bitmask_flag_plot() {
         array_path: "/measurements/image/qa_flags".to_string(),
         slice_indices: vec![],
         flag_selection: FlagSelection::Flag(2), // cloud bit
+        resolution_percent: 100,
+        sample_stride: 1,
     };
     let loaded = load_plot_data(&product, &product.tree().root, &node.kind, &request, None)
         .expect("load flag plot");
@@ -138,11 +136,7 @@ fn loads_cf_decoded_plot() {
         return;
     };
 
-    let request = PlotRequest {
-        array_path: "/measurements/image/lst".to_string(),
-        slice_indices: vec![],
-        flag_selection: FlagSelection::Raw,
-    };
+    let request = PlotRequest::new("/measurements/image/lst");
     let loaded = load_plot_data(&product, &product.tree().root, &node.kind, &request, None)
         .expect("load cf-decoded plot");
 
@@ -181,11 +175,7 @@ fn opens_sl_lst_safe_when_present() {
         .root
         .find_by_path("/measurements/lst")
         .unwrap();
-    let request = PlotRequest {
-        array_path: "/measurements/lst".to_string(),
-        slice_indices: vec![],
-        flag_selection: FlagSelection::Raw,
-    };
+    let request = PlotRequest::new("/measurements/lst");
     let loaded = load_plot_data(&product, &product.tree().root, &node.kind, &request, None)
         .expect("plot lst from safe");
     assert!(matches!(loaded.plot, PlotData::Heatmap { .. }));

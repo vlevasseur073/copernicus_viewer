@@ -4,7 +4,7 @@ pub mod cf_decode;
 pub mod flags;
 pub mod georef;
 pub mod loader;
-pub mod panel;
+pub mod workspace;
 
 pub use cf_decode::{CfEncoding, apply_cf_decode, parse_cf_encoding};
 
@@ -14,4 +14,4 @@ pub use loader::{
     PlotData, PlotLoadResult, PlotRequest, ProgressCallback, load_plot_data, mutex_progress,
     shared_progress,
 };
-pub use panel::PlotPanel;
+pub use workspace::{PlotLayout, PlotPanel, PlotSlotId, PlotSlotKey, PlotWorkspace};
