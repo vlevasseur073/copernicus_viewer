@@ -898,52 +898,69 @@ impl CopernicusViewer {
         for (store_index, product_name) in products {
             let root = self.stores[store_index].tree().root.clone();
             let is_s3 = is_s3_product(self.stores[store_index].root_path());
-            ui.horizontal(|ui| {
-                if ui
-                    .small_button("✕")
-                    .on_hover_text("Close product")
-                    .clicked()
-                {
-                    to_close = Some(store_index);
-                }
+            ui.horizontal_top(|ui| {
+                ui.horizontal(|ui| {
+                    if ui
+                        .small_button("✕")
+                        .on_hover_text("Close product")
+                        .clicked()
+                    {
+                        to_close = Some(store_index);
+                    }
 
-                if is_s3 {
-                    ui.add_enabled_ui(!self.download_in_progress, |ui| {
-                        if ui
-                            .small_button("⬇")
-                            .on_hover_text("Download product")
-                            .clicked()
-                        {
-                            to_download = Some(store_index);
-                        }
-                    });
-                }
-
-                let response = egui::CollapsingHeader::new(format!("📦 {product_name}"))
-                    .id_salt(format!("product_{store_index}"))
-                    .default_open(self.stores.len() <= 2)
-                    .show(ui, |ui| {
-                        self.tree_ui(ui, store_index, &root);
-                    });
-
-                response.header_response.context_menu(|ui| {
                     if is_s3 {
                         ui.add_enabled_ui(!self.download_in_progress, |ui| {
-                            if ui.button("Download product…").clicked() {
+                            if ui
+                                .small_button("⬇")
+                                .on_hover_text("Download product")
+                                .clicked()
+                            {
                                 to_download = Some(store_index);
-                                ui.close();
                             }
                         });
                     }
-                    if ui.button("Close product").clicked() {
-                        to_close = Some(store_index);
-                        ui.close();
-                    }
                 });
 
-                if response.header_response.double_clicked() {
-                    self.select_node(store_index, &root);
-                }
+                ui.vertical(|ui| {
+                    ui.set_min_width(0.0);
+                    let header_id = egui::Id::new(format!("product_{store_index}"));
+                    let default_open = self.stores.len() <= 2;
+                    let header = egui::collapsing_header::CollapsingState::load_with_default_open(
+                        ui.ctx(),
+                        header_id,
+                        default_open,
+                    )
+                    .show_header(ui, |ui| {
+                        ui.add(
+                            egui::Label::new(format!("📦 {product_name}"))
+                                .wrap_mode(egui::TextWrapMode::Wrap),
+                        )
+                        .on_hover_text(&product_name);
+                    });
+
+                    let (_toggle_response, header_inner, _body) = header.body(|ui| {
+                        self.tree_ui(ui, store_index, &root);
+                    });
+
+                    header_inner.response.context_menu(|ui| {
+                        if is_s3 {
+                            ui.add_enabled_ui(!self.download_in_progress, |ui| {
+                                if ui.button("Download product…").clicked() {
+                                    to_download = Some(store_index);
+                                    ui.close();
+                                }
+                            });
+                        }
+                        if ui.button("Close product").clicked() {
+                            to_close = Some(store_index);
+                            ui.close();
+                        }
+                    });
+
+                    if header_inner.response.double_clicked() {
+                        self.select_node(store_index, &root);
+                    }
+                });
             });
         }
 
@@ -1059,20 +1076,25 @@ impl eframe::App for CopernicusViewer {
 
         egui::Panel::left("tree_panel")
             .default_size(260.0)
+            .min_size(96.0)
             .resizable(true)
             .show_inside(ui, |ui| {
                 ui.heading("Hierarchy");
                 ui.separator();
-                ui.label(
-                    egui::RichText::new("Click a variable to inspect and plot.")
-                        .small()
-                        .weak(),
+                ui.add(
+                    egui::Label::new(
+                        egui::RichText::new("Click a variable to inspect and plot.")
+                            .small()
+                            .weak(),
+                    )
+                    .wrap_mode(egui::TextWrapMode::Wrap),
                 );
                 ui.separator();
 
                 egui::ScrollArea::vertical()
-                    .auto_shrink([false, false])
+                    .auto_shrink([true, false])
                     .show(ui, |ui| {
+                        ui.set_min_width(0.0);
                         self.products_tree_ui(ui);
                     });
             });
