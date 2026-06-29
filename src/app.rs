@@ -12,7 +12,9 @@ use copernicus_viewer::comparison::{
     ComparisonResult, ComparisonTool, compare_products_with_options,
 };
 use copernicus_viewer::display::{InspectorView, render_inspector};
-use copernicus_viewer::plot::{PlotLoadResult, PlotPanel, load_plot_data, shared_progress};
+use copernicus_viewer::plot::{
+    PlotLoadResult, PlotPanel, PlotSlotId, load_plot_data, shared_progress,
+};
 use copernicus_viewer::product::{Product, ProductHandle, open_product};
 use copernicus_viewer::zarr::{
     DownloadProgressCallback, ZarrNodeKind, ZarrTreeNode, download_s3_product, is_s3_product,
@@ -67,12 +69,12 @@ enum LoadMessage {
         result: Result<Vec<crate::file_browser::BrowserItem>, String>,
     },
     PlotProgress {
-        store_index: usize,
-        path: String,
+        slot_id: PlotSlotId,
         fraction: f32,
         message: String,
     },
     PlotReady {
+        slot_id: PlotSlotId,
         store_index: usize,
         path: String,
         result: Result<PlotLoadResult, String>,
@@ -101,7 +103,6 @@ pub struct CopernicusViewer {
     status_message: String,
     load_tx: Sender<LoadMessage>,
     load_rx: Receiver<LoadMessage>,
-    pending_plot: Option<(usize, String)>,
     pending_native_open: Option<PendingNativeOpen>,
     open_product_dialog: OpenProductDialog,
     comparison: ComparisonTool,
@@ -124,7 +125,6 @@ impl CopernicusViewer {
             status_message: String::new(),
             load_tx,
             load_rx,
-            pending_plot: None,
             pending_native_open: None,
             open_product_dialog: OpenProductDialog::new(),
             comparison: ComparisonTool::default(),
@@ -476,18 +476,11 @@ impl CopernicusViewer {
             });
         }
 
-        if let Some((idx, path)) = self.pending_plot.clone() {
-            if idx == store_index {
-                self.pending_plot = None;
-            } else if idx > store_index {
-                self.pending_plot = Some((idx - 1, path));
-            }
-        }
+        self.plot_panel
+            .on_product_closed(store_index, selection_was_closed);
 
         if selection_was_closed {
             self.selected = None;
-            self.pending_plot = None;
-            self.plot_panel.clear();
             self.inspector = InspectorView::default();
 
             if let Some(store) = self.stores.first() {
@@ -622,18 +615,40 @@ impl CopernicusViewer {
             ..
         } = &node.kind
         {
-            self.plot_panel
-                .select_array(&node.path, shape, attributes, fill_value.as_ref());
-            self.pending_plot = Some((store_index, node.path.clone()));
-            self.request_plot_load();
-        } else {
-            self.plot_panel.clear();
-            self.pending_plot = None;
+            let product_name = store
+                .as_ref()
+                .map(|s| Self::product_name(s))
+                .unwrap_or_else(|| "product".to_string());
+            let (_, is_new) = self.plot_panel.open_or_focus(
+                store_index,
+                &node.path,
+                shape,
+                attributes,
+                fill_value.as_ref(),
+                &product_name,
+            );
+            if is_new {
+                self.start_pending_plot_loads();
+            }
         }
     }
 
-    fn request_plot_load(&mut self) {
-        let Some((store_index, path)) = self.pending_plot.clone() else {
+    fn start_pending_plot_loads(&mut self) -> bool {
+        let pending: Vec<(PlotSlotId, copernicus_viewer::plot::PlotRequest)> =
+            self.plot_panel.take_pending_requests();
+        let started = !pending.is_empty();
+        for (slot_id, request) in pending {
+            self.request_plot_load(slot_id, request);
+        }
+        started
+    }
+
+    fn request_plot_load(
+        &mut self,
+        slot_id: PlotSlotId,
+        request: copernicus_viewer::plot::PlotRequest,
+    ) {
+        let Some(store_index) = self.plot_panel.store_index_for_slot(slot_id) else {
             return;
         };
 
@@ -641,6 +656,7 @@ impl CopernicusViewer {
             return;
         };
 
+        let path = request.array_path.clone();
         let Some(node) = store.tree().root.find_by_path(&path) else {
             return;
         };
@@ -649,29 +665,18 @@ impl CopernicusViewer {
             return;
         };
 
-        let request = self.plot_panel.take_pending_request().unwrap_or_else(|| {
-            copernicus_viewer::plot::PlotRequest {
-                array_path: path.clone(),
-                slice_indices: self.plot_panel.slice_indices().to_vec(),
-                flag_selection: self.plot_panel.flag_selection(),
-            }
-        });
-
         let kind = node.kind.clone();
         let product = store.clone();
         let tree = store.tree().root.clone();
         let tx = self.load_tx.clone();
-        let path_for_progress = path.clone();
 
         let (progress_tx, progress_rx) = mpsc::channel();
         let progress_forward_tx = tx.clone();
-        let progress_forward_store = store_index;
-        let progress_forward_path = path_for_progress.clone();
+        let progress_forward_slot = slot_id;
         thread::spawn(move || {
             while let Ok((fraction, message)) = progress_rx.recv() {
                 let _ = progress_forward_tx.send(LoadMessage::PlotProgress {
-                    store_index: progress_forward_store,
-                    path: progress_forward_path.clone(),
+                    slot_id: progress_forward_slot,
                     fraction,
                     message,
                 });
@@ -683,17 +688,12 @@ impl CopernicusViewer {
             let result = load_plot_data(&product, &tree, &kind, &request, Some(progress))
                 .map_err(|e| e.to_string());
             let _ = tx.send(LoadMessage::PlotReady {
+                slot_id,
                 store_index,
                 path,
                 result,
             });
         });
-    }
-
-    fn plot_is_current(&self, store_index: usize, path: &str) -> bool {
-        self.pending_plot
-            .as_ref()
-            .is_some_and(|(idx, p)| *idx == store_index && p == path)
     }
 
     fn poll_background_tasks(&mut self, ctx: &egui::Context) -> bool {
@@ -744,31 +744,30 @@ impl CopernicusViewer {
                     }
                 },
                 LoadMessage::PlotProgress {
-                    store_index,
-                    path,
+                    slot_id,
                     fraction,
                     message,
                 } => {
-                    if !self.plot_is_current(store_index, &path) {
-                        continue;
-                    }
-                    self.plot_panel.set_load_progress(fraction, &message);
+                    self.plot_panel
+                        .set_load_progress(slot_id, fraction, &message);
                 }
                 LoadMessage::PlotReady {
+                    slot_id,
                     store_index,
                     path,
                     result,
                 } => {
-                    if !self.plot_is_current(store_index, &path) {
-                        continue;
-                    }
                     match result {
                         Ok(loaded) => {
-                            self.inspector
-                                .set_array_extras(loaded.stats.clone(), loaded.preview.clone());
-                            self.plot_panel.set_load_result(loaded);
+                            if self.selected.as_ref().is_some_and(|sel| {
+                                sel.store_index == store_index && sel.path == path
+                            }) {
+                                self.inspector
+                                    .set_array_extras(loaded.stats.clone(), loaded.preview.clone());
+                            }
+                            self.plot_panel.set_load_result(slot_id, loaded);
                         }
-                        Err(err) => self.plot_panel.set_error(err),
+                        Err(err) => self.plot_panel.set_error(slot_id, err),
                     }
                 }
                 LoadMessage::DownloadProgress {
@@ -810,8 +809,7 @@ impl CopernicusViewer {
             }
         }
 
-        if self.plot_panel.take_pending_request().is_some() {
-            self.request_plot_load();
+        if self.start_pending_plot_loads() {
             needs_repaint = true;
         }
 
@@ -1116,6 +1114,9 @@ impl eframe::App for CopernicusViewer {
         egui::CentralPanel::default().show_inside(ui, |ui| {
             let ctx = ui.ctx().clone();
             self.plot_panel.ui(ui, &ctx);
+            if self.start_pending_plot_loads() {
+                ctx.request_repaint();
+            }
         });
 
         self.open_product_dialog_ui(ui.ctx());

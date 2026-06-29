@@ -2,7 +2,7 @@ use std::ops::Range;
 use std::path::Path;
 
 use anyhow::{Context, Result, bail};
-use ndarray::ArrayD;
+use ndarray::{ArrayD, Axis};
 use netcdf;
 use netcdf::AttributeValue;
 use netcdf::types::{FloatType, IntType, NcVariableType};
@@ -92,7 +92,29 @@ pub fn read_subset_f64(
         }
     }
 
-    read_typed_subset(&var, ranges)
+    let values = read_typed_subset(&var, ranges)?;
+    Ok(squeeze_point_ranges(values, ranges))
+}
+
+/// Drop non-spatial axes where the read range selected a single index (NetCDF keeps length-1 dims).
+fn squeeze_point_ranges(mut values: ArrayD<f64>, ranges: &[Range<u64>]) -> ArrayD<f64> {
+    let spatial_start = ranges.len().saturating_sub(2);
+    let mut axis = 0;
+    for (i, range) in ranges.iter().enumerate() {
+        if i >= spatial_start {
+            axis += 1;
+            continue;
+        }
+        if range.end.saturating_sub(range.start) == 1
+            && axis < values.ndim()
+            && values.shape()[axis] == 1
+        {
+            values = values.index_axis_move(Axis(axis), 0);
+            continue;
+        }
+        axis += 1;
+    }
+    values
 }
 
 fn read_typed_subset(var: &netcdf::Variable, ranges: &[Range<u64>]) -> Result<ArrayD<f64>> {
@@ -234,5 +256,27 @@ mod probe_tests {
         }
         let meta = probe_variable(nc, "LST", &[]).expect("probe LST");
         assert!(!meta.shape.is_empty());
+    }
+
+    #[test]
+    fn read_specific_humidity_subset_squeezes_singleton_dims() {
+        let paths = [
+            "/home/vincent/Codes/Acri/sentineltoolbox/sentineltoolbox/testing/data/tiny_products/S3A_SL_2_LST____20191227T124111_20191227T124411_20221209T133218_0179_053_109______PS1_D_NR_004.SEN3/met_tx.nc",
+            "/home/vincent/Data/SLSTR/S3A_SL_2_LST____20260622T102053_20260622T102353_20260622T123949_0179_141_008_2160_PS1_O_NR_005.SEN3/met_tx.nc",
+        ];
+        let Some(nc) = paths.iter().map(Path::new).find(|p| p.exists()) else {
+            return;
+        };
+        let meta = probe_variable(nc, "specific_humidity_tx", &[]).expect("probe humidity");
+        assert!(meta.shape.len() >= 3, "dims {:?}", meta.dimension_names);
+        let extra = meta.shape.len().saturating_sub(2);
+        let mut ranges: Vec<std::ops::Range<u64>> = (0..extra).map(|_| 0u64..1).collect();
+        let y = meta.shape[meta.shape.len() - 2].min(4);
+        let x = meta.shape[meta.shape.len() - 1].min(5);
+        ranges.push(0..y);
+        ranges.push(0..x);
+        let values = read_subset_f64(nc, "specific_humidity_tx", &ranges).expect("read subset");
+        assert_eq!(values.ndim(), 2);
+        assert_eq!(values.shape(), &[y as usize, x as usize]);
     }
 }
