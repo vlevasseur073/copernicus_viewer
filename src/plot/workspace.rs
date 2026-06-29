@@ -692,6 +692,42 @@ impl PlotWorkspace {
         self.active_slot().is_some_and(|slot| slot.is_plot_ready())
     }
 
+    /// Returns `true` when the tab for `store_index` + `path` has finished loading.
+    pub fn is_slot_ready(&self, store_index: usize, path: &str) -> bool {
+        self.slots.iter().any(|slot| {
+            slot.key.store_index == store_index
+                && slot.key.array_path == path
+                && slot.is_plot_ready()
+        })
+    }
+
+    /// Set resolution on a tab and queue a reload.
+    pub fn set_slot_resolution_percent(
+        &mut self,
+        store_index: usize,
+        path: &str,
+        percent: u8,
+    ) -> bool {
+        let path = path.to_string();
+        let Some(slot) = self
+            .slots
+            .iter_mut()
+            .find(|s| s.key.store_index == store_index && s.key.array_path == path)
+        else {
+            return false;
+        };
+        slot.resolution_percent = percent.clamp(1, 100);
+        slot.queue_reload(&path);
+        self.active_slot = Some(slot.id);
+        true
+    }
+
+    /// Switch plot layout mode (tabs, horizontal, vertical, grid).
+    pub fn set_layout(&mut self, layout: PlotLayout) {
+        self.layout = layout;
+        self.ensure_split_visibility();
+    }
+
     /// Active tab slice indices (for building fallback requests).
     pub fn active_slice_indices(&self) -> &[usize] {
         self.active_slot()

@@ -1,6 +1,6 @@
 use egui::{Color32, ColorImage, Pos2, Rect};
 
-use super::land::land_rings;
+use super::land::{land_rings, ring_coords_for_view};
 use super::render::{LAND, MapView, OCEAN, graticule_step, project};
 
 pub fn rasterize_basemap(view: MapView, width: usize, height: usize) -> ColorImage {
@@ -66,8 +66,8 @@ fn draw_land_pixels(
         if !ring_intersects_view(ring, view) {
             continue;
         }
-        let points: Vec<Pos2> = ring
-            .coords
+        let simplified = ring_coords_for_view(ring, view, width, height);
+        let points: Vec<Pos2> = simplified
             .iter()
             .map(|&[lon, lat]| project(lon, lat, rect, view))
             .collect();
