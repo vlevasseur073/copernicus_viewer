@@ -207,7 +207,7 @@ jobs:
         id: git-cliff
         with:
           config: cliff.toml
-          args: --latest --strip header --strip footer
+          args: --latest --strip all
           github_token: ${{ secrets.GITHUB_TOKEN }}
         env:
           OUTPUT: RELEASE_NOTES.md
