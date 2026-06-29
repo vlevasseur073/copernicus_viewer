@@ -31,11 +31,11 @@ Both products appear in the **Hierarchy** panel. Select **`measurements/lst`** t
 
 Configure S3 bucket credentials from **File → Configure S3…**:
 
-![S3 bucket configuration dialog](docs/screenshots/02-s3-config.png)
+![S3 bucket configuration dialog](docs/screenshots/06-s3-config.png)
 
 Open **Tools → Comparison**, pick the reference and new product, then run the check. The report lists structure, variable, and flag differences — here four auxiliary variables differ while 64 measurement variables pass:
 
-![Product comparison — reference vs reprocessed SLSTR LST](docs/screenshots/03-comparison.png)
+![Product comparison — reference vs reprocessed SLSTR LST](docs/screenshots/05-comparison.png)
 
 The same comparison logic is available from the CLI:
 
@@ -49,6 +49,8 @@ To regenerate the README screenshots (maintainers):
 COPERNICUS_VIEWER_CAPTURE_DEMO=docs/screenshots cargo run -- \
   /path/to/reference.zarr /path/to/new.zarr
 ```
+
+For further details, see the [tutorial](docs/TUTORIAL.md).
 
 ## Requirements
 
