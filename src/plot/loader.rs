@@ -539,6 +539,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "safe")]
     fn load_safe_4d_meteorology_array_as_2d_heatmap() {
         use std::path::Path;
 
