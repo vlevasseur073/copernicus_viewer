@@ -156,7 +156,7 @@ pub fn load_plot_data(
     }
 
     report(0.55, "Decimating…");
-    values = squeeze_sliced_dims(values, request.slice_indices.len());
+    values = squeeze_sliced_dims(values, shape.len().saturating_sub(2));
     values = decimate_array(values, request.sample_stride);
 
     report(0.65, "Computing statistics…");
@@ -284,18 +284,13 @@ fn center_crop_range(size: u64, target: usize) -> std::ops::Range<u64> {
     (start as u64)..((start + target) as u64)
 }
 
-fn squeeze_sliced_dims(values: ArrayD<f64>, num_leading: usize) -> ArrayD<f64> {
+/// Remove leading singleton dimensions produced by fixed-index slices on extra axes.
+fn squeeze_sliced_dims(values: ArrayD<f64>, num_extra_dims: usize) -> ArrayD<f64> {
     let mut out = values;
-    for _ in 0..num_leading {
-        if out.ndim() == 0 {
-            break;
-        }
-        debug_assert_eq!(
-            out.shape()[0],
-            1,
-            "leading sliced dimension should have length 1"
-        );
+    let mut remaining = num_extra_dims;
+    while remaining > 0 && out.ndim() > 2 && out.shape()[0] == 1 {
         out = out.index_axis_move(Axis(0), 0);
+        remaining -= 1;
     }
     out
 }
@@ -486,6 +481,15 @@ mod tests {
     }
 
     #[test]
+    fn squeeze_sliced_dims_preserves_1x1_spatial_window() {
+        use ndarray::IxDyn;
+        let values = ArrayD::from_shape_vec(IxDyn(&[1, 1, 1, 1]), vec![42.0]).unwrap();
+        let out = squeeze_sliced_dims(values, 2);
+        assert_eq!(out.shape(), &[1, 1]);
+        assert_eq!(out[[0, 0]], 42.0);
+    }
+
+    #[test]
     fn plot_from_values_accepts_squeezed_3d_slice() {
         use ndarray::IxDyn;
         let values =
@@ -532,5 +536,54 @@ mod tests {
         let values = ArrayD::from_shape_vec(IxDyn(&[5]), vec![1.0, 2.0, 3.0, 4.0, 5.0]).unwrap();
         let out = decimate_array(values.clone(), 1);
         assert_eq!(out, values);
+    }
+
+    #[test]
+    fn load_safe_4d_meteorology_array_as_2d_heatmap() {
+        use std::path::Path;
+
+        use crate::product::Product;
+        use crate::safe::SafeStore;
+
+        let paths = [
+            "/home/vincent/Codes/Acri/sentineltoolbox/sentineltoolbox/testing/data/tiny_products/S3A_SL_2_LST____20191227T124111_20191227T124411_20221209T133218_0179_053_109______PS1_D_NR_004.SEN3",
+            "/home/vincent/Data/SLSTR/S3A_SL_2_LST____20260622T102053_20260622T102353_20260622T123949_0179_141_008_2160_PS1_O_NR_005.SEN3",
+        ];
+        let Some(path) = paths.iter().map(Path::new).find(|p| p.is_dir()) else {
+            return;
+        };
+
+        let store = SafeStore::open(path).expect("open SAFE");
+        let product = Product::Safe(store.clone());
+        let array_path = "/conditions/meteorology/specific_humidity_tp";
+        let node = store
+            .tree
+            .root
+            .find_by_path(array_path)
+            .expect("humidity path");
+        let kind = node.kind.clone();
+        let ZarrNodeKind::Array { shape, .. } = &kind else {
+            panic!("expected array node");
+        };
+        let extra_dims = shape.len().saturating_sub(2);
+        let request = PlotRequest {
+            array_path: array_path.to_string(),
+            slice_indices: vec![0; extra_dims],
+            flag_selection: FlagSelection::Raw,
+            resolution_percent: 10,
+            sample_stride: 1,
+        };
+
+        let result = load_plot_data(&product, &store.tree.root, &kind, &request, None)
+            .expect("load plot data");
+
+        match result.plot {
+            PlotData::Heatmap { height, width, .. } => {
+                assert!(height > 0);
+                assert!(width > 0);
+            }
+            PlotData::Message(msg) => panic!("expected heatmap, got message: {msg}"),
+            other => panic!("expected heatmap, got {other:?}"),
+        }
     }
 }
