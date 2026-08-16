@@ -13,6 +13,7 @@
 //! - [`display`] — xarray-style representations, STAC attributes, statistics, footprint map
 //! - [`plot`] — async array loading, heatmaps, CF flag variables, geo-referencing
 //! - [`comparison`] — structure, variable data, and flag comparison between two products
+//! - [`cdse`] — CDSE catalogue search and download (via `copernicus_explorer`)
 //!
 //! # Examples
 //!
@@ -43,6 +44,7 @@
 //! and [`create_sample_zarr`](https://github.com/vlevasseur073/copernicus_viewer/blob/main/examples/create_sample_zarr.rs)
 //! examples in the repository.
 
+pub mod cdse;
 pub mod comparison;
 pub mod display;
 pub mod plot;

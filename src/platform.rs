@@ -280,3 +280,18 @@ pub fn pick_download_folder(frame: &eframe::Frame) -> Option<PathBuf> {
 pub fn pick_download_folder(_frame: &eframe::Frame) -> Option<PathBuf> {
     None
 }
+
+/// Native file picker for a GeoJSON area-of-interest file. Must run on the main/UI thread.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn pick_geojson_file(frame: &eframe::Frame) -> Option<PathBuf> {
+    rfd::FileDialog::new()
+        .set_title("Select GeoJSON file")
+        .set_parent(frame)
+        .add_filter("GeoJSON", &["geojson", "json"])
+        .pick_file()
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn pick_geojson_file(_frame: &eframe::Frame) -> Option<PathBuf> {
+    None
+}

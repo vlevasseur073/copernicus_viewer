@@ -36,6 +36,8 @@ netcdf-static = ["netcdf/static"]
 
 [dependencies]
 anyhow = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+copernicus_explorer = "0.3.1"
 eframe = { version = "0.34", default-features = true, features = ["default_fonts", "glow", "wgpu", "x11", "wayland"] }
 egui = "0.34"
 egui_plot = "0.35"

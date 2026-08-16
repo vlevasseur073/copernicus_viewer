@@ -1,13 +1,19 @@
 //! Main egui application: hierarchy browser, inspector, plot panel, and comparison tool.
 #![allow(clippy::large_enum_variant)]
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
 use eframe::egui;
+use tokio::runtime::Runtime;
 
+use copernicus_explorer::{
+    OutputDestination, download_by_id_to, get_access_token, get_access_token_from_env,
+};
+use copernicus_viewer::cdse::CdseDownloadTool;
 use copernicus_viewer::comparison::{
     ComparisonResult, ComparisonTool, compare_products_with_options,
 };
@@ -17,8 +23,8 @@ use copernicus_viewer::plot::{
 };
 use copernicus_viewer::product::{Product, ProductHandle, open_product};
 use copernicus_viewer::zarr::{
-    DownloadProgressCallback, ZarrNodeKind, ZarrTreeNode, download_s3_product, is_s3_product,
-    parse_s3_location, resolve_zarr_product_path,
+    DownloadProgressCallback as S3DownloadProgressCallback, ZarrNodeKind, ZarrTreeNode,
+    download_s3_product, is_s3_product, parse_s3_location, resolve_zarr_product_path,
 };
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct SelectedNode {
@@ -92,6 +98,13 @@ enum LoadMessage {
     ComparisonReady {
         result: ComparisonResult,
     },
+    CdseSearchReady {
+        result: Result<Vec<copernicus_explorer::Product>, String>,
+    },
+    CdseDownloadReady {
+        product_id: String,
+        result: Result<String, String>,
+    },
 }
 
 /// Root egui application state for the Copernicus Viewer window.
@@ -106,6 +119,9 @@ pub struct CopernicusViewer {
     pending_native_open: Option<PendingNativeOpen>,
     open_product_dialog: OpenProductDialog,
     comparison: ComparisonTool,
+    cdse: CdseDownloadTool,
+    runtime: Arc<Runtime>,
+    pending_cdse_opens: HashSet<String>,
     s3_config: crate::s3_config_dialog::S3ConfigDialog,
     help: crate::help_dialog::HelpDialog,
     demo_capture: Option<crate::demo_capture::DemoCapture>,
@@ -117,6 +133,7 @@ impl CopernicusViewer {
     /// Create the viewer and asynchronously open any `initial_locations` (paths or `s3://` URIs).
     pub fn new(initial_locations: Vec<String>) -> Self {
         let (load_tx, load_rx) = mpsc::channel();
+        let runtime = Arc::new(Runtime::new().expect("tokio runtime"));
         let mut app = Self {
             stores: Vec::new(),
             selected: None,
@@ -128,6 +145,9 @@ impl CopernicusViewer {
             pending_native_open: None,
             open_product_dialog: OpenProductDialog::new(),
             comparison: ComparisonTool::default(),
+            cdse: CdseDownloadTool::default(),
+            runtime,
+            pending_cdse_opens: HashSet::new(),
             s3_config: crate::s3_config_dialog::S3ConfigDialog::default(),
             help: crate::help_dialog::HelpDialog::default(),
             demo_capture: crate::demo_capture::DemoCapture::from_env(),
@@ -217,10 +237,13 @@ impl CopernicusViewer {
                 .iter()
                 .any(|store| store.root_path() == canonical)
             {
+                self.pending_cdse_opens.remove(trimmed);
+                self.pending_cdse_opens.remove(&canonical);
                 self.status_message = format!("Already open: {canonical}");
                 return;
             }
         } else if self.stores.iter().any(|store| store.root_path() == trimmed) {
+            self.pending_cdse_opens.remove(trimmed);
             self.status_message = format!("Already open: {trimmed}");
             return;
         }
@@ -567,7 +590,7 @@ impl CopernicusViewer {
         });
 
         let progress_tx_for_callback = progress_tx.clone();
-        let progress: DownloadProgressCallback = Arc::new(move |update| {
+        let progress: S3DownloadProgressCallback = Arc::new(move |update| {
             let _ = progress_tx_for_callback.send((
                 update.objects_done,
                 update.bytes_done,
@@ -718,6 +741,7 @@ impl CopernicusViewer {
                 }
                 LoadMessage::StoreReady { location, result } => match result {
                     Ok(store) => {
+                        self.pending_cdse_opens.remove(&location);
                         let root_path = store.root_path().to_string();
                         if self
                             .stores
@@ -740,6 +764,9 @@ impl CopernicusViewer {
                         }
                     }
                     Err(err) => {
+                        if self.pending_cdse_opens.remove(&location) {
+                            self.cdse.note_open_failed(&location, &err);
+                        }
                         self.status_message = format!("Failed to open {location}: {err}");
                     }
                 },
@@ -805,6 +832,24 @@ impl CopernicusViewer {
                             "Comparison finished: FAILED".to_string()
                         };
                     }
+                }
+                LoadMessage::CdseSearchReady { result } => {
+                    let ok = result.is_ok();
+                    self.cdse.apply_search_result(result);
+                    self.status_message = if ok {
+                        "CDSE search finished".to_string()
+                    } else {
+                        "CDSE search failed".to_string()
+                    };
+                }
+                LoadMessage::CdseDownloadReady { product_id, result } => {
+                    let ok = result.is_ok();
+                    self.cdse.apply_download_result(&product_id, result);
+                    self.status_message = if ok {
+                        format!("CDSE download finished: {product_id}")
+                    } else {
+                        format!("CDSE download failed: {product_id}")
+                    };
                 }
             }
         }
@@ -969,6 +1014,46 @@ impl CopernicusViewer {
             self.request_product_download(store_index);
         }
     }
+
+    fn spawn_pending_cdse_work(&mut self, ctx: &egui::Context) {
+        if let Some(request) = self.cdse.take_pending_search() {
+            self.cdse.start_searching();
+            self.status_message = "Searching CDSE catalogue…".to_string();
+            let tx = self.load_tx.clone();
+            let runtime = self.runtime.clone();
+            let ctx = ctx.clone();
+            runtime.spawn(async move {
+                let result = request.execute().await;
+                let _ = tx.send(LoadMessage::CdseSearchReady { result });
+                ctx.request_repaint();
+            });
+        }
+
+        for request in self.cdse.take_pending_downloads() {
+            let product_id = request.product_id.clone();
+            let dest = OutputDestination::Local(request.dest_dir.clone());
+            let username = request.username.trim().to_string();
+            let password = request.password.clone();
+            let tx = self.load_tx.clone();
+            let ctx = ctx.clone();
+            let runtime = self.runtime.clone();
+            runtime.spawn(async move {
+                let token = if !username.is_empty() && !password.is_empty() {
+                    get_access_token(&username, &password).await
+                } else {
+                    get_access_token_from_env().await
+                };
+                let result = match token {
+                    Ok(token) => download_by_id_to(&product_id, &dest, &token)
+                        .await
+                        .map_err(|err| err.to_string()),
+                    Err(err) => Err(err.to_string()),
+                };
+                let _ = tx.send(LoadMessage::CdseDownloadReady { product_id, result });
+                ctx.request_repaint();
+            });
+        }
+    }
 }
 
 impl eframe::App for CopernicusViewer {
@@ -1020,6 +1105,17 @@ impl eframe::App for CopernicusViewer {
             }
         }
 
+        if self.cdse.take_pending_dest_folder_pick()
+            && let Some(path) = crate::platform::pick_download_folder(frame)
+        {
+            self.cdse.set_download_dir(path);
+        }
+        if self.cdse.take_pending_geojson_pick()
+            && let Some(path) = crate::platform::pick_geojson_file(frame)
+        {
+            self.cdse.set_geojson_path(path);
+        }
+
         egui::Panel::top("menu").show_inside(ui, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("File", |ui| {
@@ -1052,6 +1148,10 @@ impl eframe::App for CopernicusViewer {
                 ui.menu_button("Tools", |ui| {
                     if ui.button("Comparison…").clicked() {
                         self.comparison.show(self.stores.len());
+                        ui.close();
+                    }
+                    if ui.button("CDSE download…").clicked() {
+                        self.cdse.show();
                         ui.close();
                     }
                 });
@@ -1121,6 +1221,7 @@ impl eframe::App for CopernicusViewer {
 
         self.open_product_dialog_ui(ui.ctx());
         self.comparison.ui(ui.ctx(), &self.stores);
+        self.cdse.ui(ui.ctx());
 
         // If the comparison UI requested a run, start it in a background thread
         // so the UI thread is not blocked by the potentially long comparison.
@@ -1150,6 +1251,14 @@ impl eframe::App for CopernicusViewer {
             } else {
                 self.status_message = "Comparison request invalid (products changed)".to_string();
             }
+        }
+
+        self.spawn_pending_cdse_work(ui.ctx());
+
+        for path in self.cdse.take_paths_to_open() {
+            let location = path.display().to_string();
+            self.pending_cdse_opens.insert(location.clone());
+            self.open_path(location);
         }
 
         self.s3_config.ui(ui.ctx());
