@@ -6,7 +6,8 @@ const APP_DESCRIPTION: &str = "Copernicus Viewer is a lightweight GUI for explor
     visualizing Earth observation products from the Copernicus ecosystem, with a focus on \
     EOPF Zarr stores (.zarr directories, .zarr.zip archives, and s3:// URIs). \
     Use Tools → CDSE download to search the Copernicus Data Space catalogue and download \
-    products (set COPERNICUS_USER and COPERNICUS_PASS, or enter credentials in the tool).";
+    products (set COPERNICUS_USER and COPERNICUS_PASS, or enter credentials in the tool). \
+    Downloaded Zarr zip archives are extracted to a temporary folder and opened automatically.";
 
 const AUTHOR_NAME: &str = "Vincent Levasseur";
 const AUTHOR_EMAIL: &str = "vince.levasseur@protonmail.com";

@@ -13,7 +13,7 @@ use tokio::runtime::Runtime;
 use copernicus_explorer::{
     OutputDestination, download_by_id_to, get_access_token, get_access_token_from_env,
 };
-use copernicus_viewer::cdse::CdseDownloadTool;
+use copernicus_viewer::cdse::{CdseDownloadTool, CdsePreparedProduct, prepare_downloaded_product};
 use copernicus_viewer::comparison::{
     ComparisonResult, ComparisonTool, compare_products_with_options,
 };
@@ -103,7 +103,7 @@ enum LoadMessage {
     },
     CdseDownloadReady {
         product_id: String,
-        result: Result<String, String>,
+        result: Result<CdsePreparedProduct, String>,
     },
 }
 
@@ -122,6 +122,8 @@ pub struct CopernicusViewer {
     cdse: CdseDownloadTool,
     runtime: Arc<Runtime>,
     pending_cdse_opens: HashSet<String>,
+    /// Keeps CDSE zip extractions alive while the app session uses them.
+    cdse_extract_guards: Vec<tempfile::TempDir>,
     s3_config: crate::s3_config_dialog::S3ConfigDialog,
     help: crate::help_dialog::HelpDialog,
     demo_capture: Option<crate::demo_capture::DemoCapture>,
@@ -148,6 +150,7 @@ impl CopernicusViewer {
             cdse: CdseDownloadTool::default(),
             runtime,
             pending_cdse_opens: HashSet::new(),
+            cdse_extract_guards: Vec::new(),
             s3_config: crate::s3_config_dialog::S3ConfigDialog::default(),
             help: crate::help_dialog::HelpDialog::default(),
             demo_capture: crate::demo_capture::DemoCapture::from_env(),
@@ -844,7 +847,9 @@ impl CopernicusViewer {
                 }
                 LoadMessage::CdseDownloadReady { product_id, result } => {
                     let ok = result.is_ok();
-                    self.cdse.apply_download_result(&product_id, result);
+                    if let Some(guard) = self.cdse.apply_download_result(&product_id, result) {
+                        self.cdse_extract_guards.push(guard);
+                    }
                     self.status_message = if ok {
                         format!("CDSE download finished: {product_id}")
                     } else {
@@ -1044,9 +1049,14 @@ impl CopernicusViewer {
                     get_access_token_from_env().await
                 };
                 let result = match token {
-                    Ok(token) => download_by_id_to(&product_id, &dest, &token)
+                    Ok(token) => match download_by_id_to(&product_id, &dest, &token).await {
+                        Ok(path) => tokio::task::spawn_blocking(move || {
+                            prepare_downloaded_product(PathBuf::from(path))
+                        })
                         .await
-                        .map_err(|err| err.to_string()),
+                        .unwrap_or_else(|err| Err(format!("extract task failed: {err}"))),
+                        Err(err) => Err(err.to_string()),
+                    },
                     Err(err) => Err(err.to_string()),
                 };
                 let _ = tx.send(LoadMessage::CdseDownloadReady { product_id, result });

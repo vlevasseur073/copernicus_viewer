@@ -4,12 +4,16 @@
 //! and download workers on a shared Tokio runtime and auto-opens successful
 //! downloads with the existing product open path.
 
+mod extract;
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 use chrono::{Duration, Utc};
 use copernicus_explorer::{BoundingBox, Geometry, Point, Product, Satellite, SearchQuery};
 use eframe::egui;
+
+pub use extract::{CdsePreparedProduct, prepare_downloaded_product};
 
 /// Snapshot of a catalogue hit for display and download.
 #[derive(Clone, Debug)]
@@ -213,15 +217,28 @@ impl CdseDownloadTool {
         }
     }
 
-    pub fn apply_download_result(&mut self, product_id: &str, result: Result<String, String>) {
+    pub fn apply_download_result(
+        &mut self,
+        product_id: &str,
+        result: Result<CdsePreparedProduct, String>,
+    ) -> Option<tempfile::TempDir> {
         match result {
-            Ok(path) => {
+            Ok(prepared) => {
+                let status_path = match &prepared.zip_path {
+                    Some(zip) => format!(
+                        "{} (extracted from {})",
+                        prepared.open_path.display(),
+                        zip.display()
+                    ),
+                    None => prepared.open_path.display().to_string(),
+                };
                 self.downloads.insert(
                     product_id.to_string(),
-                    CdseDownloadUiStatus::Completed { path: path.clone() },
+                    CdseDownloadUiStatus::Completed { path: status_path },
                 );
-                self.paths_to_open.push(PathBuf::from(&path));
+                self.paths_to_open.push(prepared.open_path);
                 self.status = "Download complete; opening product…".to_string();
+                prepared.extract_guard
             }
             Err(message) => {
                 self.downloads.insert(
@@ -231,6 +248,7 @@ impl CdseDownloadTool {
                     },
                 );
                 self.status = format!("Download failed: {message}");
+                None
             }
         }
     }
@@ -240,10 +258,7 @@ impl CdseDownloadTool {
     }
 
     pub fn note_open_failed(&mut self, path: &str, err: &str) {
-        self.status = format!(
-            "Downloaded to {path}; open failed: {err}. \
-             Extract SAFE archives manually or use a Zarr product."
-        );
+        self.status = format!("Prepared product at {path}; open failed: {err}.");
     }
 
     fn search_request(&self) -> CdseSearchRequest {
