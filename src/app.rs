@@ -11,7 +11,8 @@ use eframe::egui;
 use tokio::runtime::Runtime;
 
 use copernicus_explorer::{
-    OutputDestination, download_by_id_to, get_access_token, get_access_token_from_env,
+    DownloadProgressCallback, DownloadProgressEvent, OutputDestination,
+    download_by_id_to_with_progress, get_access_token, get_access_token_from_env,
 };
 use copernicus_viewer::cdse::{CdseDownloadTool, CdsePreparedProduct, prepare_downloaded_product};
 use copernicus_viewer::comparison::{
@@ -100,6 +101,10 @@ enum LoadMessage {
     },
     CdseSearchReady {
         result: Result<Vec<copernicus_explorer::Product>, String>,
+    },
+    CdseDownloadProgress {
+        product_id: String,
+        event: DownloadProgressEvent,
     },
     CdseDownloadReady {
         product_id: String,
@@ -845,6 +850,9 @@ impl CopernicusViewer {
                         "CDSE search failed".to_string()
                     };
                 }
+                LoadMessage::CdseDownloadProgress { product_id, event } => {
+                    self.cdse.apply_download_progress(&product_id, event);
+                }
                 LoadMessage::CdseDownloadReady { product_id, result } => {
                     let ok = result.is_ok();
                     if let Some(guard) = self.cdse.apply_download_result(&product_id, result) {
@@ -1040,7 +1048,17 @@ impl CopernicusViewer {
             let username = request.username.trim().to_string();
             let password = request.password.clone();
             let tx = self.load_tx.clone();
+            let progress_tx = tx.clone();
+            let progress_id = product_id.clone();
             let ctx = ctx.clone();
+            let progress_ctx = ctx.clone();
+            let progress: DownloadProgressCallback = Arc::new(move |event| {
+                let _ = progress_tx.send(LoadMessage::CdseDownloadProgress {
+                    product_id: progress_id.clone(),
+                    event,
+                });
+                progress_ctx.request_repaint();
+            });
             let runtime = self.runtime.clone();
             runtime.spawn(async move {
                 let token = if !username.is_empty() && !password.is_empty() {
@@ -1049,14 +1067,18 @@ impl CopernicusViewer {
                     get_access_token_from_env().await
                 };
                 let result = match token {
-                    Ok(token) => match download_by_id_to(&product_id, &dest, &token).await {
-                        Ok(path) => tokio::task::spawn_blocking(move || {
-                            prepare_downloaded_product(PathBuf::from(path))
-                        })
-                        .await
-                        .unwrap_or_else(|err| Err(format!("extract task failed: {err}"))),
-                        Err(err) => Err(err.to_string()),
-                    },
+                    Ok(token) => {
+                        match download_by_id_to_with_progress(&product_id, &dest, &token, progress)
+                            .await
+                        {
+                            Ok(path) => tokio::task::spawn_blocking(move || {
+                                prepare_downloaded_product(PathBuf::from(path))
+                            })
+                            .await
+                            .unwrap_or_else(|err| Err(format!("extract task failed: {err}"))),
+                            Err(err) => Err(err.to_string()),
+                        }
+                    }
                     Err(err) => Err(err.to_string()),
                 };
                 let _ = tx.send(LoadMessage::CdseDownloadReady { product_id, result });

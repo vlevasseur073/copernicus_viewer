@@ -10,7 +10,9 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use chrono::{Duration, Utc};
-use copernicus_explorer::{BoundingBox, Geometry, Point, Product, Satellite, SearchQuery};
+use copernicus_explorer::{
+    BoundingBox, DownloadProgressEvent, Geometry, Point, Product, Satellite, SearchQuery,
+};
 use eframe::egui;
 
 pub use extract::{CdsePreparedProduct, prepare_downloaded_product};
@@ -75,13 +77,18 @@ pub struct CdseDownloadRequest {
 
 #[derive(Clone, Debug)]
 pub enum CdseDownloadUiStatus {
-    Downloading,
-    Completed { path: String },
-    Failed { message: String },
-}
-
-fn same_satellite(a: Satellite, b: Satellite) -> bool {
-    a.collection_name() == b.collection_name()
+    Downloading {
+        label: String,
+        downloaded: u64,
+        total: Option<u64>,
+    },
+    Extracting,
+    Completed {
+        path: String,
+    },
+    Failed {
+        message: String,
+    },
 }
 
 const SATELLITES: [Satellite; 5] = [
@@ -217,6 +224,59 @@ impl CdseDownloadTool {
         }
     }
 
+    pub fn apply_download_progress(&mut self, product_id: &str, event: DownloadProgressEvent) {
+        match event {
+            DownloadProgressEvent::Started { label, total } => {
+                self.downloads.insert(
+                    product_id.to_string(),
+                    CdseDownloadUiStatus::Downloading {
+                        label,
+                        downloaded: 0,
+                        total,
+                    },
+                );
+            }
+            DownloadProgressEvent::Progress { downloaded } => {
+                match self.downloads.get(product_id).cloned() {
+                    Some(CdseDownloadUiStatus::Downloading { label, total, .. }) => {
+                        self.downloads.insert(
+                            product_id.to_string(),
+                            CdseDownloadUiStatus::Downloading {
+                                label,
+                                downloaded,
+                                total,
+                            },
+                        );
+                    }
+                    _ => {
+                        self.downloads.insert(
+                            product_id.to_string(),
+                            CdseDownloadUiStatus::Downloading {
+                                label: product_id.to_string(),
+                                downloaded,
+                                total: None,
+                            },
+                        );
+                    }
+                }
+            }
+            DownloadProgressEvent::Completed { .. } => {
+                self.downloads
+                    .insert(product_id.to_string(), CdseDownloadUiStatus::Extracting);
+                self.status = "Download complete; extracting product…".to_string();
+            }
+            DownloadProgressEvent::Failed { message } => {
+                self.downloads.insert(
+                    product_id.to_string(),
+                    CdseDownloadUiStatus::Failed {
+                        message: message.clone(),
+                    },
+                );
+                self.status = format!("Download failed: {message}");
+            }
+        }
+    }
+
     pub fn apply_download_result(
         &mut self,
         product_id: &str,
@@ -291,7 +351,7 @@ impl CdseDownloadTool {
     }
 
     fn sync_product_with_satellite(&mut self) {
-        if !same_satellite(self.satellite, self.previous_satellite) {
+        if self.satellite != self.previous_satellite {
             self.previous_satellite = self.satellite;
             self.product = self.satellite.known_products()[0].to_string();
         } else if !self.satellite.is_valid_product(&self.product) {
@@ -302,7 +362,7 @@ impl CdseDownloadTool {
     fn queue_download(&mut self, product: &CdseProductRow) {
         if matches!(
             self.downloads.get(&product.id),
-            Some(CdseDownloadUiStatus::Downloading)
+            Some(CdseDownloadUiStatus::Downloading { .. } | CdseDownloadUiStatus::Extracting)
         ) {
             return;
         }
@@ -310,8 +370,14 @@ impl CdseDownloadTool {
             self.status = "Choose a download folder first.".to_string();
             return;
         };
-        self.downloads
-            .insert(product.id.clone(), CdseDownloadUiStatus::Downloading);
+        self.downloads.insert(
+            product.id.clone(),
+            CdseDownloadUiStatus::Downloading {
+                label: product.name.clone(),
+                downloaded: 0,
+                total: None,
+            },
+        );
         self.pending_downloads.push(request);
         self.status = format!("Downloading {}…", product.name);
     }
@@ -359,11 +425,12 @@ impl CdseDownloadTool {
             });
         self.open = keep_open;
 
-        if self
-            .downloads
-            .values()
-            .any(|s| matches!(s, CdseDownloadUiStatus::Downloading))
-        {
+        if self.downloads.values().any(|s| {
+            matches!(
+                s,
+                CdseDownloadUiStatus::Downloading { .. } | CdseDownloadUiStatus::Extracting
+            )
+        }) {
             ctx.request_repaint();
         }
     }
@@ -384,10 +451,7 @@ impl CdseDownloadTool {
                     .width(field_width)
                     .show_ui(ui, |ui| {
                         for sat in SATELLITES {
-                            let selected = same_satellite(self.satellite, sat);
-                            if ui.selectable_label(selected, sat.to_string()).clicked() {
-                                self.satellite = sat;
-                            }
+                            ui.selectable_value(&mut self.satellite, sat, sat.to_string());
                         }
                     });
                 ui.end_row();
@@ -579,11 +643,21 @@ impl CdseDownloadTool {
 
                         if let Some(state) = self.downloads.get(&product.id).cloned() {
                             match state {
-                                CdseDownloadUiStatus::Downloading => {
+                                CdseDownloadUiStatus::Downloading {
+                                    downloaded, total, ..
+                                } => {
+                                    let (fraction, text) = progress_display(downloaded, total);
                                     ui.add(
-                                        egui::ProgressBar::new(0.0)
-                                            .animate(true)
-                                            .text("Downloading…"),
+                                        egui::ProgressBar::new(fraction)
+                                            .text(text)
+                                            .animate(total.is_none_or(|t| t == 0)),
+                                    );
+                                }
+                                CdseDownloadUiStatus::Extracting => {
+                                    ui.add(
+                                        egui::ProgressBar::new(1.0)
+                                            .text("Extracting…")
+                                            .animate(true),
                                     );
                                 }
                                 CdseDownloadUiStatus::Completed { path } => {
@@ -616,6 +690,36 @@ impl CdseDownloadTool {
                     ui.add_space(4.0);
                 }
             });
+    }
+}
+
+fn progress_display(downloaded: u64, total: Option<u64>) -> (f32, String) {
+    if let Some(total) = total.filter(|t| *t > 0) {
+        let fraction = (downloaded as f32 / total as f32).clamp(0.0, 1.0);
+        let text = format!(
+            "{} / {} ({:.0}%)",
+            format_bytes(downloaded),
+            format_bytes(total),
+            fraction * 100.0
+        );
+        (fraction, text)
+    } else {
+        (0.0, format!("{} downloaded", format_bytes(downloaded)))
+    }
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
+    let mut size = bytes as f64;
+    let mut unit = 0;
+    while size >= 1024.0 && unit < UNITS.len() - 1 {
+        size /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{} {}", bytes, UNITS[0])
+    } else {
+        format!("{size:.1} {}", UNITS[unit])
     }
 }
 
