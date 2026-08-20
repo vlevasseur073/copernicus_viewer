@@ -276,6 +276,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "safe")]
     fn extracts_nested_safe_directory() {
         let dir = tempfile::tempdir().expect("temp");
         let zip_path = dir.path().join("product.SAFE.zip");
@@ -287,6 +288,20 @@ mod tests {
         assert!(prepared.open_path.join("xfdumanifest.xml").is_file());
         assert_eq!(prepared.zip_path.as_deref(), Some(zip_path.as_path()));
         assert!(prepared.extract_guard.is_some());
+    }
+
+    #[test]
+    #[cfg(not(feature = "safe"))]
+    fn rejects_nested_safe_directory_without_safe_feature() {
+        let dir = tempfile::tempdir().expect("temp");
+        let zip_path = dir.path().join("product.SAFE.zip");
+        let inner = "S3B_OL_2_WFR____20200101T000000_20200101T000300_20200102T120000_0179_000_000______MAR_O_NT_002.SEN3";
+        write_safe_zip(&zip_path, inner);
+
+        match prepare_downloaded_product(zip_path) {
+            Ok(_) => panic!("expected SAFE extraction to fail without the safe feature"),
+            Err(err) => assert!(err.contains("SAFE support is disabled")),
+        }
     }
 
     #[test]

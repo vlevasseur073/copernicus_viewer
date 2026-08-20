@@ -250,13 +250,12 @@ pub fn parse_root_attributes(
             ZarrNodeKind::Group { attributes } => attributes,
             _ => return None,
         }
-    } else if let Some(root) = root {
+    } else {
+        let root = root?;
         match &root.kind {
             ZarrNodeKind::Group { attributes } => attributes,
             _ => return None,
         }
-    } else {
-        return None;
     };
 
     if attributes.is_empty() {

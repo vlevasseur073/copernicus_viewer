@@ -89,7 +89,7 @@ pub fn render_footprint_map(ui: &mut Ui, footprint: &ProductFootprint) {
     painter.rect_stroke(
         rect,
         4.0,
-        Stroke::new(1.0, Color32::from_gray(70)),
+        Stroke::new(1.0_f32, Color32::from_gray(70)),
         egui::StrokeKind::Inside,
     );
     painter.image(
@@ -237,7 +237,7 @@ fn draw_footprint(
                 points,
                 closed: true,
                 fill: footprint_fill_color(),
-                stroke: Stroke::new(2.0, FOOTPRINT_STROKE).into(),
+                stroke: Stroke::new(2.0_f32, FOOTPRINT_STROKE).into(),
             }));
             return;
         }
@@ -252,7 +252,7 @@ fn draw_footprint(
     painter.add(Shape::convex_polygon(
         corners.to_vec(),
         footprint_fill_color(),
-        Stroke::new(2.0, FOOTPRINT_STROKE),
+        Stroke::new(2.0_f32, FOOTPRINT_STROKE),
     ));
 }
 
