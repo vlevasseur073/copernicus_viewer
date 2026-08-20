@@ -16,6 +16,7 @@ A Rust GUI application to explore and visualize [EOPF](https://cpm.pages.eopf.co
 - **Coverage map** in the inspector — adaptive Plate Carrée view (zooms to regional tiles, global view for wide footprints) with Natural Earth coastlines
 - **Product comparison** (**Tools → Comparison**) — compare a reference and a new product (structure, variable data, CF flags) with user-defined thresholds and a pass/fail report; same logic via the `compare_products` example
 - **S3 product download** — copy an open S3-hosted product to a local `.zarr` directory (**File → Download product…**, hierarchy **⬇** icon, or right-click on the product name)
+- **CDSE catalogue download** — search the [Copernicus Data Space Ecosystem](https://dataspace.copernicus.eu/) catalogue and download products (**Tools → CDSE download…**); zip archives are extracted and opened automatically
 
 ## Quick start
 
@@ -239,6 +240,41 @@ When an S3 product is open, download it to your local filesystem as a `.zarr` di
 Choose a parent folder in the native dialog; the product is saved as `<folder>/<product-name>.zarr` with the same Zarr layout as on S3. Progress appears in the status bar. The download fails if that destination folder already exists.
 
 The library API [`download_s3_product`](src/zarr/download.rs) is also available for scripts and automation.
+
+## CDSE catalogue download
+
+Search the [Copernicus Data Space Ecosystem (CDSE)](https://dataspace.copernicus.eu/) catalogue and download Sentinel products from **Tools → CDSE download…**. Catalogue search is anonymous; downloads require a free [CDSE account](https://dataspace.copernicus.eu/).
+
+### Search
+
+In the **CDSE download** window, choose a satellite (Sentinel-1, Sentinel-2, Sentinel-3, Sentinel-5P, or Sentinel-6) and a product type, then optionally refine with:
+
+| Field | Notes |
+|-------|--------|
+| Start / end date | `YYYY-MM-DD` (both required if either is set; default is the last 7 days) |
+| Tile | MGRS tile, e.g. `31TFJ` |
+| Max cloud cover | 0–100 % |
+| Point | `lat,lon` |
+| Bounding box | `tlat,llon,blat,rlon` |
+| GeoJSON file | Area of interest (use **Browse…**) |
+| Max results | 1–100 |
+
+Use only one of point, bounding box, or GeoJSON. Click **Search**; matching products list acquisition date, cloud cover, and online status.
+
+### Credentials and download
+
+Pick a **Download folder** (or **Browse…**). Authenticate either in **CDSE credentials (optional)** or with environment variables:
+
+```bash
+export COPERNICUS_USER="you@example.com"
+export COPERNICUS_PASS="yourpassword"
+```
+
+Download a single hit with **Download**, or tick several rows and use **Download selected**. Progress is shown in the window and the status bar. Zip archives (EOPF Zarr or Sentinel-3 SAFE `.SEN3`) are extracted to a temporary directory and opened automatically; the original zip stays in the download folder. Opening `.SEN3` products requires a build with the `safe` feature (on by default).
+
+Catalogue search and download use the [`copernicus_explorer`](https://crates.io/crates/copernicus_explorer) crate.
+
+![CDSE search-and-download window](docs/screenshots/07-cdse-download.png)
 
 ## Releasing (maintainers)
 
